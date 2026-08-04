@@ -74,4 +74,3 @@ class LLMClient:
         if not text:
             raise LLMError("Локальная LLM вернула пустой ответ")
         return text
-

@@ -48,7 +48,7 @@ async def create_product(
     grants_rank: CommunityRank | None = None,
 ) -> Product:
     require_permission(actor, Permission.MANAGE_STORE)
-    if price < 0 or stock is not None and stock < 0:
+    if price < 0 or (stock is not None and stock < 0):
         raise EconomyError("Цена и остаток не могут быть отрицательными")
     product = Product(
         name=name.strip(),
@@ -64,6 +64,44 @@ async def create_product(
     return product
 
 
+async def update_product(
+    session: AsyncSession,
+    actor: User,
+    product_id: int,
+    field: str,
+    raw_value: str,
+) -> Product:
+    require_permission(actor, Permission.MANAGE_STORE)
+    product = await session.scalar(
+        select(Product).where(Product.id == product_id).with_for_update()
+    )
+    if product is None:
+        raise EconomyError("Награда не найдена")
+    value = raw_value.strip()
+    if field == "name":
+        product.name = value
+    elif field == "description":
+        product.description = value
+    elif field == "price":
+        product.price = int(value)
+        if product.price < 0:
+            raise EconomyError("Цена не может быть отрицательной")
+    elif field == "stock":
+        product.stock = None if value.lower() == "inf" else int(value)
+        if product.stock is not None and product.stock < 0:
+            raise EconomyError("Остаток не может быть отрицательным")
+    elif field == "visible":
+        if value.lower() not in {"true", "false", "1", "0"}:
+            raise EconomyError("visible принимает true или false")
+        product.is_visible = value.lower() in {"true", "1"}
+    elif field == "min_rank":
+        product.min_rank = CommunityRank(value)
+    else:
+        raise EconomyError("Можно менять: name, description, price, stock, visible, min_rank")
+    await session.flush()
+    return product
+
+
 async def purchase(
     session: AsyncSession,
     buyer_id: int,
@@ -74,16 +112,14 @@ async def purchase(
 ) -> Order:
     if quantity <= 0:
         raise EconomyError("Количество должно быть положительным")
-    existing = await session.scalar(
-        select(Order).where(Order.idempotency_key == idempotency_key)
-    )
+    existing = await session.scalar(select(Order).where(Order.idempotency_key == idempotency_key))
     if existing:
         return existing
 
-    buyer = await session.scalar(
-        select(User).where(User.telegram_id == buyer_id).with_for_update()
+    buyer = await session.scalar(select(User).where(User.telegram_id == buyer_id).with_for_update())
+    product = await session.scalar(
+        select(Product).where(Product.id == product_id).with_for_update()
     )
-    product = await session.scalar(select(Product).where(Product.id == product_id).with_for_update())
     if buyer is None or product is None or not product.is_visible:
         raise EconomyError("Товар недоступен")
     if RANK_WEIGHT[buyer.rank] < RANK_WEIGHT[product.min_rank]:
@@ -170,4 +206,3 @@ async def resolve_order(
         )
     await session.flush()
     return order
-

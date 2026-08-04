@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import enum
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     DateTime,
@@ -12,7 +13,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -25,18 +25,18 @@ class Base(DeclarativeBase):
     pass
 
 
-class StaffRole(str, enum.Enum):
+class StaffRole(StrEnum):
     MAGISTER = "magister"
     TECH_PRIEST = "tech_priest"
     WATCHER = "watcher"
 
 
-class CommunityRank(str, enum.Enum):
+class CommunityRank(StrEnum):
     NOVICE = "novice"
     ADEPT = "adept"
 
 
-class ContentStatus(str, enum.Enum):
+class ContentStatus(StrEnum):
     DRAFT = "draft"
     MODERATION = "moderation"
     NEEDS_INFO = "needs_info"
@@ -45,13 +45,13 @@ class ContentStatus(str, enum.Enum):
     PUBLISHED = "published"
 
 
-class ContentKind(str, enum.Enum):
+class ContentKind(StrEnum):
     STAFF_NOTE = "staff_note"
     STORY = "story"
     MEME = "meme"
 
 
-class LedgerType(str, enum.Enum):
+class LedgerType(StrEnum):
     GRANT = "grant"
     WITHDRAW = "withdraw"
     TRANSFER_OUT = "transfer_out"
@@ -61,13 +61,13 @@ class LedgerType(str, enum.Enum):
     ADJUSTMENT = "adjustment"
 
 
-class OrderStatus(str, enum.Enum):
+class OrderStatus(StrEnum):
     PENDING = "pending"
     FULFILLED = "fulfilled"
     CANCELLED = "cancelled"
 
 
-class ProductKind(str, enum.Enum):
+class ProductKind(StrEnum):
     PHYSICAL = "physical"
     SERVICE = "service"
     RANK = "rank"
@@ -138,7 +138,9 @@ class Interview(Base):
     state: Mapped[str] = mapped_column(String(32), default="prompted")
     answers: Mapped[list[str]] = mapped_column(JSON, default=list)
     content_item_id: Mapped[int | None] = mapped_column(ForeignKey("content_items.id"))
-    prompted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    prompted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -225,4 +227,3 @@ class ChannelActivity(Base):
     last_message_id: Mapped[int | None] = mapped_column(BigInteger)
     last_reminder_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_interviewee_id: Mapped[int | None] = mapped_column(ForeignKey("users.telegram_id"))
-

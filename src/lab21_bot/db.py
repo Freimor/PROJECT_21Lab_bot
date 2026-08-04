@@ -52,4 +52,3 @@ async def bootstrap_database(
             )
         elif user.staff_role is not StaffRole.MAGISTER:
             user.staff_role = StaffRole.MAGISTER
-

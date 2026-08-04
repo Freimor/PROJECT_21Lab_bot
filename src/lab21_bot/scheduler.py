@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -8,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from lab21_bot.config import Settings
 from lab21_bot.llm.prompts import INTERVIEW_QUESTIONS
 from lab21_bot.services.content import choose_interviewee, content_is_silent
+from lab21_bot.services.settings import get_int_setting
 
 
 def create_scheduler(
@@ -19,10 +22,22 @@ def create_scheduler(
 
     async def content_reminder() -> None:
         async with factory.begin() as session:
+            reminder_hour = await get_int_setting(
+                session,
+                "reminder_hour",
+                settings.reminder_hour,
+            )
+            if datetime.now(settings.tz).hour != reminder_hour:
+                return
+            silence_days = await get_int_setting(
+                session,
+                "content_silence_days",
+                settings.content_silence_days,
+            )
             silent = await content_is_silent(
                 session,
                 settings.main_channel_id,
-                settings.content_silence_days,
+                silence_days,
             )
             if not silent:
                 return
@@ -49,7 +64,7 @@ def create_scheduler(
     scheduler.add_job(
         content_reminder,
         trigger="cron",
-        hour=settings.reminder_hour,
+        hour=f"{settings.reminder_window_start}-{settings.reminder_window_end - 1}",
         minute=0,
         id="content-reminder",
         replace_existing=True,
@@ -57,4 +72,3 @@ def create_scheduler(
         coalesce=True,
     )
     return scheduler
-

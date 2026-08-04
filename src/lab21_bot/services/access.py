@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import enum
+from enum import StrEnum
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from lab21_bot.models import AdminAction, StaffRole, User
 
 
-class Permission(str, enum.Enum):
+class Permission(StrEnum):
     MANAGE_STAFF = "manage_staff"
     MANAGE_SETTINGS = "manage_settings"
     MANAGE_STORE = "manage_store"
@@ -96,4 +96,3 @@ async def list_staff(session: AsyncSession) -> list[User]:
         select(User).where(User.staff_role.is_not(None)).order_by(User.full_name)
     )
     return list(result)
-

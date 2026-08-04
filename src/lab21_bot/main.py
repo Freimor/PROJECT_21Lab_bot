@@ -25,9 +25,7 @@ def configure_logging(level: str) -> None:
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.JSONRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(
-            logging.getLevelName(level.upper())
-        ),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level.upper())),
     )
 
 
@@ -74,4 +72,3 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
-

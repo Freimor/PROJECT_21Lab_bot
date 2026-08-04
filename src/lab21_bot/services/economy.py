@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,13 +35,14 @@ async def _locked_user(session: AsyncSession, telegram_id: int) -> User:
     return user
 
 
-async def _existing_entry(
-    session: AsyncSession, idempotency_key: str | None
-) -> LedgerEntry | None:
+async def _existing_entry(session: AsyncSession, idempotency_key: str | None) -> LedgerEntry | None:
     if not idempotency_key:
         return None
-    return await session.scalar(
-        select(LedgerEntry).where(LedgerEntry.idempotency_key == idempotency_key)
+    return cast(
+        LedgerEntry | None,
+        await session.scalar(
+            select(LedgerEntry).where(LedgerEntry.idempotency_key == idempotency_key)
+        ),
     )
 
 
@@ -97,9 +99,7 @@ async def transfer(
     existing = await _existing_entry(session, f"{idempotency_key}:out")
     if existing:
         incoming = await session.scalar(
-            select(LedgerEntry).where(
-                LedgerEntry.idempotency_key == f"{idempotency_key}:in"
-            )
+            select(LedgerEntry).where(LedgerEntry.idempotency_key == f"{idempotency_key}:in")
         )
         if incoming is None:
             raise EconomyError("Обнаружена незавершённая транзакция")
@@ -169,4 +169,3 @@ async def history(session: AsyncSession, user_id: int, limit: int = 20) -> list[
         .limit(limit)
     )
     return list(rows)
-

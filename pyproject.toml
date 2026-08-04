@@ -44,9 +44,14 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+ignore = ["RUF001"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 packages = ["lab21_bot"]
+
+[[tool.mypy.overrides]]
+module = "apscheduler.*"
+ignore_missing_imports = true
 

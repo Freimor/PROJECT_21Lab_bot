@@ -167,21 +167,29 @@ async def choose_interviewee(
         await session.scalars(
             select(User)
             .where(
-                User.staff_role.in_(
-                    [StaffRole.MAGISTER, StaffRole.TECH_PRIEST, StaffRole.WATCHER]
-                ),
+                User.staff_role.in_([StaffRole.MAGISTER, StaffRole.TECH_PRIEST, StaffRole.WATCHER]),
                 User.is_active.is_(True),
             )
             .order_by(User.telegram_id)
         )
     )
-    if not staff:
+    active_interviewees = set(
+        await session.scalars(
+            select(Interview.employee_id).where(Interview.state.in_(["prompted", "generating"]))
+        )
+    )
+    available_staff = [user for user in staff if user.telegram_id not in active_interviewees]
+    if not available_staff:
         return None
     index = next(
-        (position + 1 for position, user in enumerate(staff) if user.telegram_id == last_id),
+        (
+            position + 1
+            for position, user in enumerate(available_staff)
+            if user.telegram_id == last_id
+        ),
         0,
-    ) % len(staff)
-    selected = staff[index]
+    ) % len(available_staff)
+    selected = available_staff[index]
     if activity is None:
         activity = ChannelActivity(
             channel_id=channel_id,
@@ -192,4 +200,3 @@ async def choose_interviewee(
     activity.last_reminder_at = now
     session.add(Interview(employee_id=selected.telegram_id))
     return selected
-

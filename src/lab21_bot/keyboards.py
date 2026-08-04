@@ -18,9 +18,7 @@ def main_menu(user: User) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📨 Предложить материал", callback_data="menu:submit")],
     ]
     if user.staff_role is not None:
-        rows.append(
-            [InlineKeyboardButton(text="⚙️ Служебное меню", callback_data="menu:staff")]
-        )
+        rows.append([InlineKeyboardButton(text="⚙️ Служебное меню", callback_data="menu:staff")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -35,6 +33,7 @@ def staff_menu(user: User) -> InlineKeyboardMarkup:
             [
                 [InlineKeyboardButton(text="👥 Состав сотрудников", callback_data="staff:list")],
                 [InlineKeyboardButton(text="🏪 Управление витриной", callback_data="staff:store")],
+                [InlineKeyboardButton(text="🛠 Настройки", callback_data="staff:settings")],
             ]
         )
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -89,4 +88,3 @@ def order_actions(order: Order) -> InlineKeyboardMarkup:
             ]
         ]
     )
-

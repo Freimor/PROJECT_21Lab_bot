@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
@@ -37,7 +36,6 @@ from lab21_bot.models import (
     ContentKind,
     ContentStatus,
     Interview,
-    LedgerEntry,
     Order,
     OrderStatus,
     Product,
@@ -63,7 +61,14 @@ from lab21_bot.services.content import (
     submit_community_content,
 )
 from lab21_bot.services.economy import EconomyError, change_balance, history, transfer
-from lab21_bot.services.store import create_product, purchase, resolve_order, visible_products
+from lab21_bot.services.settings import SettingError, get_int_setting, set_int_setting
+from lab21_bot.services.store import (
+    create_product,
+    purchase,
+    resolve_order,
+    update_product,
+    visible_products,
+)
 
 
 class StaffPostState(StatesGroup):
@@ -126,27 +131,46 @@ async def _publish_item(bot: Bot, channel_id: int, item: ContentItem) -> int:
     if not item.media:
         sent = await bot.send_message(channel_id, text)
         return sent.message_id
+    caption = text if len(text) <= 1024 else None
     if len(item.media) == 1:
         media = item.media[0]
         if media["type"] == "photo":
-            sent = await bot.send_photo(channel_id, media["file_id"], caption=text)
+            sent = await bot.send_photo(channel_id, media["file_id"], caption=caption)
         elif media["type"] == "video":
-            sent = await bot.send_video(channel_id, media["file_id"], caption=text)
+            sent = await bot.send_video(channel_id, media["file_id"], caption=caption)
         else:
-            sent = await bot.send_document(channel_id, media["file_id"], caption=text)
+            sent = await bot.send_document(channel_id, media["file_id"], caption=caption)
+        if caption is None:
+            text_message = await bot.send_message(channel_id, text)
+            return text_message.message_id
         return sent.message_id
 
     telegram_media: list[InputMediaPhoto | InputMediaVideo | InputMediaDocument] = []
     for index, media in enumerate(item.media):
-        caption = text if index == 0 else None
+        item_caption = caption if index == 0 else None
         if media["type"] == "photo":
-            telegram_media.append(InputMediaPhoto(media=media["file_id"], caption=caption))
+            telegram_media.append(InputMediaPhoto(media=media["file_id"], caption=item_caption))
         elif media["type"] == "video":
-            telegram_media.append(InputMediaVideo(media=media["file_id"], caption=caption))
+            telegram_media.append(InputMediaVideo(media=media["file_id"], caption=item_caption))
         else:
-            telegram_media.append(InputMediaDocument(media=media["file_id"], caption=caption))
-    sent_group = await bot.send_media_group(channel_id, telegram_media)
+            telegram_media.append(InputMediaDocument(media=media["file_id"], caption=item_caption))
+    sent_group = await bot.send_media_group(
+        channel_id,
+        telegram_media,  # type: ignore[arg-type]
+    )
+    if caption is None:
+        text_message = await bot.send_message(channel_id, text)
+        return text_message.message_id
     return sent_group[0].message_id
+
+
+async def _send_review_item(bot: Bot, chat_id: int, item: ContentItem) -> None:
+    await _publish_item(bot, chat_id, item)
+    await bot.send_message(
+        chat_id,
+        f"Действия с материалом #{item.id}:",
+        reply_markup=content_actions(item),
+    )
 
 
 def create_router(
@@ -192,6 +216,8 @@ def create_router(
     @router.message(Command("balance"))
     async def show_balance(event: Message | CallbackQuery) -> None:
         telegram_user = event.from_user
+        if telegram_user is None:
+            return
         async with factory() as session:
             user = await current_user(session, telegram_user.id)
             label = "Адепт" if user.rank is CommunityRank.ADEPT else "Послушник"
@@ -211,14 +237,15 @@ def create_router(
             await current_user(session, message.from_user.id)
             entries = await history(session, message.from_user.id)
             lines = [
-                f"{entry.created_at:%d.%m} {entry.delta:+d} — {entry.reason}"
-                for entry in entries
+                f"{entry.created_at:%d.%m} {entry.delta:+d} — {entry.reason}" for entry in entries
             ]
         await message.answer("\n".join(lines) if lines else "История пока пуста.")
 
     @router.callback_query(F.data == "menu:shop")
     @router.message(Command("shop"))
     async def show_shop(event: Message | CallbackQuery) -> None:
+        if event.from_user is None:
+            return
         async with factory() as session:
             user = await current_user(session, event.from_user.id)
             products = await visible_products(session, user)
@@ -271,13 +298,18 @@ def create_router(
         try:
             recipient_id, amount = int(parts[1]), int(parts[2])
             async with factory.begin() as session:
+                daily_limit = await get_int_setting(
+                    session,
+                    "transfer_daily_limit",
+                    settings.transfer_daily_limit,
+                )
                 await transfer(
                     session,
                     message.from_user.id,
                     recipient_id,
                     amount,
                     parts[3],
-                    settings.transfer_daily_limit,
+                    daily_limit,
                     idempotency_key=f"message:{message.chat.id}:{message.message_id}",
                 )
             await message.answer(f"Передано {amount} лабкоинов.")
@@ -325,9 +357,7 @@ def create_router(
                 await message.answer("Служебное меню:", reply_markup=staff_menu(actor))
             return
         if len(parts) != 3 or parts[2].lower() not in ROLE_ALIASES:
-            await message.answer(
-                "Формат: /staff TELEGRAM_ID magister|tech_priest|watcher|none"
-            )
+            await message.answer("Формат: /staff TELEGRAM_ID magister|tech_priest|watcher|none")
             return
         try:
             async with factory.begin() as session:
@@ -364,9 +394,65 @@ def create_router(
         if callback.message:
             await callback.message.answer("\n".join(lines))
 
+    @router.message(Command("setting"))
+    async def setting_command(message: Message) -> None:
+        if not message.from_user:
+            return
+        parts = (message.text or "").split()
+        if len(parts) != 3:
+            await message.answer(
+                "Формат: /setting КЛЮЧ ЗНАЧЕНИЕ\n"
+                "Ключи: content_silence_days, reminder_hour, transfer_daily_limit"
+            )
+            return
+        try:
+            value = int(parts[2])
+            if parts[1] == "reminder_hour" and not (
+                settings.reminder_window_start <= value < settings.reminder_window_end
+            ):
+                raise SettingError("Час напоминания должен попадать в разрешённое дневное окно")
+            async with factory.begin() as session:
+                actor = await current_user(session, message.from_user.id)
+                await set_int_setting(session, actor, parts[1], value)
+            await message.answer("Настройка сохранена.")
+        except (ValueError, AccessDenied, SettingError) as error:
+            await message.answer(str(error))
+
+    @router.callback_query(F.data == "staff:settings")
+    async def settings_callback(callback: CallbackQuery) -> None:
+        async with factory() as session:
+            actor = await current_user(session, callback.from_user.id)
+            require_permission(actor, Permission.MANAGE_SETTINGS)
+            silence_days = await get_int_setting(
+                session,
+                "content_silence_days",
+                settings.content_silence_days,
+            )
+            reminder_hour = await get_int_setting(
+                session,
+                "reminder_hour",
+                settings.reminder_hour,
+            )
+            transfer_limit = await get_int_setting(
+                session,
+                "transfer_daily_limit",
+                settings.transfer_daily_limit,
+            )
+        await callback.answer()
+        if callback.message:
+            await callback.message.answer(
+                "Настройки:\n"
+                f"content_silence_days = {silence_days}\n"
+                f"reminder_hour = {reminder_hour}\n"
+                f"transfer_daily_limit = {transfer_limit}\n\n"
+                "Изменение: /setting КЛЮЧ ЗНАЧЕНИЕ"
+            )
+
     @router.callback_query(F.data.in_({"staff:new_post"}))
     @router.message(Command("post"))
     async def begin_staff_post(event: Message | CallbackQuery, state: FSMContext) -> None:
+        if event.from_user is None:
+            return
         async with factory() as session:
             actor = await current_user(session, event.from_user.id)
             require_permission(actor, Permission.CREATE_STAFF_CONTENT)
@@ -411,7 +497,7 @@ def create_router(
                 assert item is not None
                 item.draft_text = generated
             await callback.answer("Готово")
-            if callback.message:
+            if isinstance(callback.message, Message):
                 await callback.message.edit_text(
                     generated, reply_markup=content_actions(item, staff_draft=True)
                 )
@@ -470,11 +556,9 @@ def create_router(
                 session.expunge(item)
             message_id = await _publish_item(bot, settings.main_channel_id, item)
             async with factory.begin() as session:
-                await mark_published(
-                    session, item_id, message_id, settings.main_channel_id
-                )
+                await mark_published(session, item_id, message_id, settings.main_channel_id)
             await callback.answer("Опубликовано")
-            if callback.message:
+            if isinstance(callback.message, Message):
                 await callback.message.edit_reply_markup(reply_markup=None)
         except (AccessDenied, ContentError) as error:
             await callback.answer(str(error), show_alert=True)
@@ -495,7 +579,7 @@ def create_router(
                 else "Материал отклонён. Можно подготовить новую версию.",
             )
             await callback.answer("Статус обновлён")
-            if callback.message:
+            if isinstance(callback.message, Message):
                 await callback.message.edit_reply_markup(reply_markup=None)
         except (AccessDenied, ContentError) as error:
             await callback.answer(str(error), show_alert=True)
@@ -531,17 +615,23 @@ def create_router(
 
     @router.message(SubmissionState.story)
     @router.message(SubmissionState.meme)
-    async def receive_submission(
-        message: Message, state: FSMContext, bot: Bot
-    ) -> None:
+    async def receive_submission(message: Message, state: FSMContext, bot: Bot) -> None:
         if not message.from_user:
             return
         messages = await albums.collect(message)
         if messages is None:
             return
         current_state = await state.get_state()
-        kind = ContentKind.STORY if current_state == SubmissionState.story.state else ContentKind.MEME
-        text = next((item.caption or item.text for item in messages if item.caption or item.text), "")
+        kind = (
+            ContentKind.STORY if current_state == SubmissionState.story.state else ContentKind.MEME
+        )
+        text = (
+            next(
+                (item.caption or item.text for item in messages if item.caption or item.text),
+                "",
+            )
+            or ""
+        )
         media = _media_from_messages(messages)
         if not text and not media:
             await message.answer("Этот формат не поддерживается.")
@@ -551,14 +641,10 @@ def create_router(
             item = await submit_community_content(session, author, kind, text, media)
         await state.clear()
         await message.answer(f"Материал #{item.id} передан Смотрящим.")
-        await bot.send_message(
-            settings.staff_chat_id,
-            f"Материал #{item.id} от {author.full_name}\n\n{item.draft_text}",
-            reply_markup=content_actions(item),
-        )
+        await _send_review_item(bot, settings.staff_chat_id, item)
 
     @router.callback_query(F.data == "staff:moderation")
-    async def moderation_queue(callback: CallbackQuery) -> None:
+    async def moderation_queue(callback: CallbackQuery, bot: Bot) -> None:
         async with factory() as session:
             actor = await current_user(session, callback.from_user.id)
             require_permission(actor, Permission.MODERATE_CONTENT)
@@ -576,9 +662,7 @@ def create_router(
         if not items:
             await callback.message.answer("Очередь модерации пуста.")
         for item in items:
-            await callback.message.answer(
-                f"#{item.id}\n{item.draft_text}", reply_markup=content_actions(item)
-            )
+            await _send_review_item(bot, callback.message.chat.id, item)
 
     @router.callback_query(F.data.regexp(r"^order:(approve|cancel):\d+$"))
     async def order_resolution(callback: CallbackQuery, bot: Bot) -> None:
@@ -593,10 +677,14 @@ def create_router(
             await bot.send_message(
                 buyer_id,
                 f"Заказ #{order.id} "
-                + ("подтверждён." if order.status is OrderStatus.FULFILLED else "отменён, средства возвращены."),
+                + (
+                    "подтверждён."
+                    if order.status is OrderStatus.FULFILLED
+                    else "отменён, средства возвращены."
+                ),
             )
             await callback.answer("Заказ обработан")
-            if callback.message:
+            if isinstance(callback.message, Message):
                 await callback.message.edit_reply_markup(reply_markup=None)
         except (AccessDenied, EconomyError) as error:
             await callback.answer(str(error), show_alert=True)
@@ -671,17 +759,39 @@ def create_router(
                 "Добавление награды:\n"
                 "/product название | описание | цена | остаток/inf | "
                 "novice/adept | physical/service/rank | выдаваемый_ранг\n\n"
-                "Посвящение: kind=rank, выдаваемый_ранг=adept."
+                "Посвящение: kind=rank, выдаваемый_ранг=adept.\n\n"
+                "Изменение: /product_edit ID поле значение\n"
+                "Поля: name, description, price, stock, visible, min_rank."
             )
+
+    @router.message(Command("product_edit"))
+    async def product_edit_command(message: Message) -> None:
+        if not message.from_user:
+            return
+        parts = (message.text or "").split(maxsplit=3)
+        if len(parts) != 4:
+            await message.answer("Формат: /product_edit ID ПОЛЕ ЗНАЧЕНИЕ")
+            return
+        try:
+            async with factory.begin() as session:
+                actor = await current_user(session, message.from_user.id)
+                product = await update_product(
+                    session,
+                    actor,
+                    int(parts[1]),
+                    parts[2],
+                    parts[3],
+                )
+            await message.answer(f"Награда #{product.id} обновлена.")
+        except (ValueError, EconomyError, AccessDenied) as error:
+            await message.answer(str(error))
 
     @router.channel_post()
     async def channel_activity(message: Message) -> None:
         if message.chat.id != settings.main_channel_id:
             return
         async with factory.begin() as session:
-            await record_channel_post(
-                session, settings.main_channel_id, message.message_id
-            )
+            await record_channel_post(session, settings.main_channel_id, message.message_id)
 
     @router.message(F.chat.type == "private")
     async def interview_answer(message: Message, bot: Bot) -> None:
@@ -738,7 +848,19 @@ def create_router(
                 f"{actor.full_name} завершил интервью. Черновик #{item.id} готов.",
             )
         except (LLMError, AccessDenied) as error:
+            async with factory.begin() as session:
+                failed = await session.scalar(
+                    select(Interview)
+                    .where(
+                        Interview.employee_id == message.from_user.id,
+                        Interview.state == "generating",
+                    )
+                    .order_by(Interview.prompted_at.desc())
+                    .limit(1)
+                    .with_for_update()
+                )
+                if failed:
+                    failed.state = "prompted"
             await message.answer(str(error))
 
     return router
-
