@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lab21-bot"
+version = "0.1.0"
+description = "Telegram concierge, content and community economy bot for Lab21"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram==3.30.0",
+    "alembic==1.18.5",
+    "apscheduler==3.11.3",
+    "asyncpg==0.31.0",
+    "httpx==0.28.1",
+    "pydantic-settings==2.14.2",
+    "sqlalchemy[asyncio]==2.0.51",
+    "structlog==26.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "aiosqlite==0.22.1",
+    "mypy==2.3.0",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "ruff==0.16.1",
+]
+
+[project.scripts]
+lab21-bot = "lab21_bot.main:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["lab21_bot"]
+

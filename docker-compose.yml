@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lab21}
+      POSTGRES_USER: ${POSTGRES_USER:-lab21}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lab21} -d ${POSTGRES_DB:-lab21}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    profiles: ["llm"]
+
+  ollama-model:
+    image: curlimages/curl:latest
+    profiles: ["llm"]
+    depends_on:
+      ollama:
+        condition: service_started
+    environment:
+      OLLAMA_MODEL: ${LLM_MODEL:-qwen3:4b}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        until curl -sf http://ollama:11434/api/tags >/dev/null; do sleep 2; done
+        curl -sf http://ollama:11434/api/pull -d "{\"name\":\"$${OLLAMA_MODEL}\"}"
+    restart: "no"
+
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lab21}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lab21}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  ollama_data:
+
