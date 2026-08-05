@@ -34,9 +34,21 @@ def staff_menu(user: User) -> InlineKeyboardMarkup:
                 [InlineKeyboardButton(text="👥 Состав сотрудников", callback_data="staff:list")],
                 [InlineKeyboardButton(text="🏪 Управление витриной", callback_data="staff:store")],
                 [InlineKeyboardButton(text="🛠 Настройки", callback_data="staff:settings")],
+                [InlineKeyboardButton(text="🔄 Перезагрузка", callback_data="staff:reboot")],
             ]
         )
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def reboot_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Перезагрузить", callback_data="reboot:confirm"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="reboot:cancel"),
+            ]
+        ]
+    )
 
 
 def content_actions(item: ContentItem, *, staff_draft: bool = False) -> InlineKeyboardMarkup:

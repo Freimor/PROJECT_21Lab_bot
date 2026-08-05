@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     transfer_daily_limit: int = Field(default=100, ge=0)
     log_level: str = "INFO"
 
+    control_dir: str = "/control"
+    app_git_sha: str = "unknown"
+    github_repo: str = "Freimor/PROJECT_21Lab_bot"
+    github_branch: str = "main"
+    github_token: SecretStr | None = None
+
     @field_validator("llm_provider")
     @classmethod
     def validate_provider(cls, value: str) -> str:

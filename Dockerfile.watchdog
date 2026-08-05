@@ -1,0 +1,14 @@
+FROM docker:27-cli
+
+RUN apk add --no-cache git python3 docker-cli-compose
+
+WORKDIR /repo
+COPY scripts/watchdog.sh /usr/local/bin/lab21-watchdog
+RUN chmod +x /usr/local/bin/lab21-watchdog
+
+ENV CONTROL_DIR=/control \
+    REPO_DIR=/repo \
+    COMPOSE_FILE=docker-compose.yml \
+    WATCHDOG_POLL_SECONDS=5
+
+CMD ["lab21-watchdog"]

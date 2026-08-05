@@ -27,6 +27,7 @@ from lab21_bot.keyboards import (
     main_menu,
     order_actions,
     products_keyboard,
+    reboot_confirm_keyboard,
     staff_menu,
 )
 from lab21_bot.llm.client import LLMClient, LLMError
@@ -61,6 +62,11 @@ from lab21_bot.services.content import (
     submit_community_content,
 )
 from lab21_bot.services.economy import EconomyError, change_balance, history, transfer
+from lab21_bot.services.lifecycle import (
+    LifecycleError,
+    check_github_updates,
+    request_restart,
+)
 from lab21_bot.services.settings import SettingError, get_int_setting, set_int_setting
 from lab21_bot.services.store import (
     create_product,
@@ -447,6 +453,81 @@ def create_router(
                 f"transfer_daily_limit = {transfer_limit}\n\n"
                 "Изменение: /setting КЛЮЧ ЗНАЧЕНИЕ"
             )
+
+    @router.callback_query(F.data == "staff:reboot")
+    @router.message(Command("reboot"))
+    async def reboot_prompt(event: Message | CallbackQuery) -> None:
+        if event.from_user is None:
+            return
+        try:
+            async with factory() as session:
+                actor = await current_user(session, event.from_user.id)
+                require_permission(actor, Permission.MANAGE_SETTINGS)
+            status = await check_github_updates(settings)
+            text = (
+                "Перезагрузка остановит бота, затем watchdog проверит GitHub "
+                f"({settings.github_branch}) и при необходимости установит обновления.\n\n"
+                f"{status.message}\n"
+                f"Текущая сборка: {status.current_sha[:12]}"
+            )
+            if status.compare_url:
+                text += f"\nСравнение: {status.compare_url}"
+            markup = reboot_confirm_keyboard()
+            if isinstance(event, CallbackQuery):
+                await event.answer()
+                if event.message:
+                    await event.message.answer(text, reply_markup=markup)
+            else:
+                await event.answer(text, reply_markup=markup)
+        except AccessDenied as error:
+            if isinstance(event, CallbackQuery):
+                await event.answer(str(error), show_alert=True)
+            else:
+                await event.answer(str(error))
+
+    @router.callback_query(F.data == "reboot:cancel")
+    async def reboot_cancel(callback: CallbackQuery) -> None:
+        await callback.answer("Отменено")
+        if isinstance(callback.message, Message):
+            await callback.message.edit_reply_markup(reply_markup=None)
+
+    @router.callback_query(F.data == "reboot:confirm")
+    async def reboot_confirm(callback: CallbackQuery) -> None:
+        try:
+            status = await check_github_updates(settings)
+            async with factory.begin() as session:
+                actor = await current_user(session, callback.from_user.id)
+                await request_restart(
+                    session,
+                    actor,
+                    settings,
+                    reason="telegram admin reboot",
+                    update_status=status,
+                )
+            await callback.answer("Запрос принят")
+            if isinstance(callback.message, Message):
+                await callback.message.edit_text(
+                    "Запрос на перезагрузку отправлен watchdog.\n"
+                    "Бот скоро перезапустится. После старта придёт отчёт."
+                )
+        except (AccessDenied, LifecycleError) as error:
+            await callback.answer(str(error), show_alert=True)
+
+    @router.message(Command("update_status"))
+    async def update_status_command(message: Message) -> None:
+        if not message.from_user:
+            return
+        try:
+            async with factory() as session:
+                actor = await current_user(session, message.from_user.id)
+                require_permission(actor, Permission.MANAGE_SETTINGS)
+            status = await check_github_updates(settings)
+            text = status.message
+            if status.compare_url:
+                text += f"\n{status.compare_url}"
+            await message.answer(text)
+        except AccessDenied as error:
+            await message.answer(str(error))
 
     @router.callback_query(F.data.in_({"staff:new_post"}))
     @router.message(Command("post"))

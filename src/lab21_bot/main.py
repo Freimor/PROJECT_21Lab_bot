@@ -3,17 +3,21 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from typing import Any
 
 import structlog
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from lab21_bot.config import get_settings
+from lab21_bot.config import Settings, get_settings
 from lab21_bot.db import bootstrap_database, create_engine, create_session_factory
 from lab21_bot.handlers import create_router
 from lab21_bot.llm.client import LLMClient
+from lab21_bot.models import BotSetting
 from lab21_bot.scheduler import create_scheduler
+from lab21_bot.services.lifecycle import LAST_RESTART_SETTING, consume_restart_result
 
 
 def configure_logging(level: str) -> None:
@@ -27,6 +31,35 @@ def configure_logging(level: str) -> None:
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level.upper())),
     )
+
+
+async def notify_restart_result(
+    bot: Bot,
+    factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+) -> None:
+    async with factory.begin() as session:
+        payload: dict[str, Any] | None = await consume_restart_result(session, settings)
+        if not payload or payload.get("notified"):
+            return
+        actor_id = payload.get("requested_by")
+        status = payload.get("status", "unknown")
+        applied = str(payload.get("applied_sha", "unknown"))[:12]
+        updated = "да" if payload.get("updated") else "нет"
+        detail = payload.get("detail", "")
+        if actor_id:
+            await bot.send_message(
+                int(actor_id),
+                "Перезагрузка завершена.\n"
+                f"Статус: {status}\n"
+                f"Обновления применены: {updated}\n"
+                f"Версия: {applied}\n"
+                f"{detail}",
+            )
+        payload["notified"] = True
+        setting = await session.get(BotSetting, LAST_RESTART_SETTING)
+        if setting is not None:
+            setting.value = payload
 
 
 async def main() -> None:
@@ -52,10 +85,18 @@ async def main() -> None:
             BotCommand(command="transfer", description="Передать лабкоины"),
             BotCommand(command="staff", description="Служебное меню"),
             BotCommand(command="post", description="Создать пост"),
+            BotCommand(command="reboot", description="Перезагрузка и обновление"),
+            BotCommand(command="update_status", description="Проверить обновления GitHub"),
         ]
     )
     scheduler.start()
-    log.info("bot_started", model=settings.llm_model, provider=settings.llm_provider)
+    await notify_restart_result(bot, factory, settings)
+    log.info(
+        "bot_started",
+        model=settings.llm_model,
+        provider=settings.llm_provider,
+        git_sha=settings.app_git_sha,
+    )
     try:
         await dispatcher.start_polling(bot)
     finally:
