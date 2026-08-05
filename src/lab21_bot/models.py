@@ -26,6 +26,7 @@ class Base(DeclarativeBase):
 
 
 class StaffRole(StrEnum):
+    LORD = "lord"
     MAGISTER = "magister"
     TECH_PRIEST = "tech_priest"
     WATCHER = "watcher"
@@ -59,6 +60,8 @@ class LedgerType(StrEnum):
     PURCHASE_RESERVE = "purchase_reserve"
     PURCHASE_REFUND = "purchase_refund"
     ADJUSTMENT = "adjustment"
+    RESPECT_GRANT = "respect_grant"
+    RESPECT_WITHDRAW = "respect_withdraw"
 
 
 class OrderStatus(StrEnum):
@@ -68,9 +71,26 @@ class OrderStatus(StrEnum):
 
 
 class ProductKind(StrEnum):
-    PHYSICAL = "physical"
+    MERCH = "merch"
+    DEVICE = "device"
     SERVICE = "service"
-    RANK = "rank"
+
+
+class JoinKind(StrEnum):
+    COMMUNITY = "community"
+    STAFF = "staff"
+
+
+class JoinStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+
+
+class RemovalReason(StrEnum):
+    NONE = "none"
+    RULES = "rules"
 
 
 class User(Base):
@@ -79,6 +99,7 @@ class User(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     username: Mapped[str | None] = mapped_column(String(64))
     full_name: Mapped[str] = mapped_column(String(255))
+    avatar_file_id: Mapped[str | None] = mapped_column(String(255))
     staff_role: Mapped[StaffRole | None] = mapped_column(
         Enum(StaffRole, native_enum=False), nullable=True
     )
@@ -86,7 +107,14 @@ class User(Base):
         Enum(CommunityRank, native_enum=False), default=CommunityRank.NOVICE
     )
     balance: Mapped[int] = mapped_column(Integer, default=0)
+    respect: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
+    removal_reason: Mapped[RemovalReason | None] = mapped_column(
+        Enum(RemovalReason, native_enum=False), nullable=True
+    )
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    removed_by: Mapped[int | None] = mapped_column(ForeignKey("users.telegram_id"))
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -95,6 +123,28 @@ class User(Base):
     ledger_entries: Mapped[list[LedgerEntry]] = relationship(
         back_populates="account_user", foreign_keys="LedgerEntry.account_user_id"
     )
+
+
+class JoinApplication(Base):
+    __tablename__ = "join_applications"
+    __table_args__ = (
+        Index("ix_join_apps_status_kind", "status", "kind"),
+        Index("ix_join_apps_user_status", "user_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.telegram_id"))
+    kind: Mapped[JoinKind] = mapped_column(Enum(JoinKind, native_enum=False))
+    status: Mapped[JoinStatus] = mapped_column(
+        Enum(JoinStatus, native_enum=False), default=JoinStatus.PENDING
+    )
+    decided_by: Mapped[int | None] = mapped_column(ForeignKey("users.telegram_id"))
+    decision_note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
 
 
 class AdminAction(Base):
@@ -172,6 +222,7 @@ class Product(Base):
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    article: Mapped[str] = mapped_column(String(64), unique=True)
     name: Mapped[str] = mapped_column(String(160))
     description: Mapped[str] = mapped_column(Text)
     price: Mapped[int] = mapped_column(Integer)
@@ -180,11 +231,12 @@ class Product(Base):
         Enum(CommunityRank, native_enum=False), default=CommunityRank.NOVICE
     )
     kind: Mapped[ProductKind] = mapped_column(
-        Enum(ProductKind, native_enum=False), default=ProductKind.PHYSICAL
+        Enum(ProductKind, native_enum=False), default=ProductKind.MERCH
     )
     grants_rank: Mapped[CommunityRank | None] = mapped_column(
         Enum(CommunityRank, native_enum=False)
     )
+    image_path: Mapped[str | None] = mapped_column(String(255))
     is_visible: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

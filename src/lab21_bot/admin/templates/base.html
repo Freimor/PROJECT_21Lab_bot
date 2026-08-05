@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Lab21 Admin{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/admin.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body>
+{% if user %}
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">Lab<span>21</span> Admin</div>
+    <nav class="nav">
+      <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Дашборд</a>
+      {% if nav.can_people %}<a href="/people" class="{% if request.url.path.startswith('/people') %}active{% endif %}">Люди</a>{% endif %}
+      {% if nav.can_shop %}<a href="/shop" class="{% if request.url.path.startswith('/shop') %}active{% endif %}">Магазин</a>{% endif %}
+      {% if nav.can_moderation %}<a href="/moderation" class="{% if request.url.path.startswith('/moderation') %}active{% endif %}">Модерация</a>{% endif %}
+    </nav>
+    <div class="user-box">
+      <div class="user-row">
+        {% if user.avatar_file_id %}
+        <img class="avatar" src="/avatar/{{ user.telegram_id }}" alt="">
+        {% else %}
+        <div class="avatar avatar-fallback">{{ user.full_name[:1] }}</div>
+        {% endif %}
+        <div>
+          <strong>{{ user.full_name }}</strong>
+          {% if user.username %}@{{ user.username }} · {% endif %}{{ role_labels.get(user.staff_role.value, user.staff_role.value) }}
+        </div>
+      </div>
+      <form method="post" action="/logout" style="margin-top:0.75rem">
+        <button type="submit" class="secondary">Выйти</button>
+      </form>
+    </div>
+  </aside>
+  <main class="content">
+    {% if message %}<div class="flash ok">{{ message }}</div>{% endif %}
+    {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% else %}
+  {% block body %}{% endblock %}
+{% endif %}
+</body>
+</html>

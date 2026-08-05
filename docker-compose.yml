@@ -53,6 +53,25 @@ services:
       postgres:
         condition: service_healthy
 
+  admin:
+    build:
+      context: .
+      args:
+        GIT_SHA: ${APP_GIT_SHA:-unknown}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lab21}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lab21}
+      UPLOAD_DIR: /app/uploads
+    command: ["sh", "-c", "alembic upgrade head && exec lab21-admin"]
+    ports:
+      - "${ADMIN_PORT:-8080}:8080"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   watchdog:
     build:
       context: .
@@ -80,3 +99,4 @@ volumes:
   ollama_data:
   control_data:
   deploy_repo:
+  uploads_data:

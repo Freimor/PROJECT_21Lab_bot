@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from lab21_bot.models import (
+    AdminAction,
     CommunityRank,
     LedgerEntry,
     LedgerType,
@@ -23,9 +24,13 @@ from lab21_bot.services.economy import EconomyError
 RANK_WEIGHT = {CommunityRank.NOVICE: 0, CommunityRank.ADEPT: 1}
 
 
+def normalize_article(article: str) -> str:
+    return article.strip().upper()
+
+
 async def visible_products(session: AsyncSession, buyer: User) -> list[Product]:
     products = await session.scalars(
-        select(Product).where(Product.is_visible.is_(True)).order_by(Product.id)
+        select(Product).where(Product.is_visible.is_(True)).order_by(Product.article)
     )
     return [
         product
@@ -35,22 +40,56 @@ async def visible_products(session: AsyncSession, buyer: User) -> list[Product]:
     ]
 
 
+async def get_product_by_article(session: AsyncSession, article: str) -> Product | None:
+    normalized = normalize_article(article)
+    if not normalized:
+        return None
+    return await session.scalar(select(Product).where(Product.article == normalized))
+
+
+async def list_products(session: AsyncSession) -> list[Product]:
+    products = await session.scalars(select(Product).order_by(Product.article))
+    return list(products)
+
+
+async def list_orders(
+    session: AsyncSession,
+    *,
+    status: OrderStatus | None = OrderStatus.PENDING,
+    limit: int = 100,
+) -> list[Order]:
+    query = select(Order).options(selectinload(Order.product)).order_by(Order.created_at.desc())
+    if status is not None:
+        query = query.where(Order.status == status)
+    orders = await session.scalars(query.limit(limit))
+    return list(orders)
+
+
 async def create_product(
     session: AsyncSession,
     actor: User,
     *,
+    article: str,
     name: str,
     description: str,
     price: int,
     stock: int | None,
     min_rank: CommunityRank = CommunityRank.NOVICE,
-    kind: ProductKind = ProductKind.PHYSICAL,
+    kind: ProductKind = ProductKind.MERCH,
     grants_rank: CommunityRank | None = None,
+    image_path: str | None = None,
 ) -> Product:
     require_permission(actor, Permission.MANAGE_STORE)
     if price < 0 or (stock is not None and stock < 0):
         raise EconomyError("Цена и остаток не могут быть отрицательными")
+    normalized = normalize_article(article)
+    if not normalized:
+        raise EconomyError("Артикул обязателен")
+    existing = await get_product_by_article(session, normalized)
+    if existing is not None:
+        raise EconomyError(f"Артикул {normalized} уже занят")
     product = Product(
+        article=normalized,
         name=name.strip(),
         description=description.strip(),
         price=price,
@@ -58,8 +97,18 @@ async def create_product(
         min_rank=min_rank,
         kind=kind,
         grants_rank=grants_rank,
+        image_path=image_path,
     )
     session.add(product)
+    await session.flush()
+    session.add(
+        AdminAction(
+            actor_id=actor.telegram_id,
+            action="create_product",
+            target_id=None,
+            details={"product_id": product.id, "article": product.article, "kind": kind.value},
+        )
+    )
     await session.flush()
     return product
 
@@ -78,7 +127,15 @@ async def update_product(
     if product is None:
         raise EconomyError("Награда не найдена")
     value = raw_value.strip()
-    if field == "name":
+    if field == "article":
+        normalized = normalize_article(value)
+        if not normalized:
+            raise EconomyError("Артикул обязателен")
+        clash = await get_product_by_article(session, normalized)
+        if clash is not None and clash.id != product.id:
+            raise EconomyError(f"Артикул {normalized} уже занят")
+        product.article = normalized
+    elif field == "name":
         product.name = value
     elif field == "description":
         product.description = value
@@ -96,8 +153,19 @@ async def update_product(
         product.is_visible = value.lower() in {"true", "1"}
     elif field == "min_rank":
         product.min_rank = CommunityRank(value)
+    elif field == "kind":
+        product.kind = ProductKind(value)
     else:
-        raise EconomyError("Можно менять: name, description, price, stock, visible, min_rank")
+        raise EconomyError(
+            "Можно менять: article, name, description, price, stock, visible, min_rank, kind"
+        )
+    session.add(
+        AdminAction(
+            actor_id=actor.telegram_id,
+            action="update_product",
+            details={"product_id": product.id, "field": field, "value": value},
+        )
+    )
     await session.flush()
     return product
 
@@ -122,13 +190,15 @@ async def purchase(
     )
     if buyer is None or product is None or not product.is_visible:
         raise EconomyError("Товар недоступен")
+    if buyer.staff_role is not None:
+        raise EconomyError("У сотрудников нет благодати")
     if RANK_WEIGHT[buyer.rank] < RANK_WEIGHT[product.min_rank]:
         raise EconomyError("Для этой награды требуется более высокий ранг")
     if product.stock is not None and product.stock < quantity:
         raise EconomyError("Недостаточный остаток")
     total = product.price * quantity
     if buyer.balance < total:
-        raise EconomyError("Недостаточно лабкоинов")
+        raise EconomyError("Недостаточно благодати")
 
     buyer.balance -= total
     if product.stock is not None:
@@ -204,5 +274,17 @@ async def resolve_order(
                 reason=f"Возврат по отменённому заказу #{order.id}",
             )
         )
+    session.add(
+        AdminAction(
+            actor_id=actor.telegram_id,
+            action="fulfill_order" if approve else "cancel_order",
+            target_id=buyer.telegram_id,
+            details={
+                "order_id": order.id,
+                "product_id": order.product_id,
+                "total_price": order.total_price,
+            },
+        )
+    )
     await session.flush()
     return order

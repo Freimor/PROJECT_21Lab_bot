@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Вход — Lab21 Admin{% endblock %}
+{% block body %}
+<div class="login-wrap">
+  <div class="login-card">
+    <h1>Lab21 Admin</h1>
+    <p>Вход для сотрудников со служебной ролью.</p>
+    {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+
+    {% if telegram_login_available %}
+    <script async src="https://telegram.org/js/telegram-widget.js?22"
+      data-telegram-login="{{ bot_username }}"
+      data-size="large"
+      data-auth-url="{{ admin_base_url.rstrip('/') }}/auth/telegram"
+      data-request-access="write"></script>
+    {% elif bot_username %}
+    <p class="muted">Telegram Login недоступен на localhost — нужен публичный HTTPS-домен в BotFather. Сейчас используйте пароль ниже.</p>
+    {% else %}
+    <p class="muted">Укажите <code>TELEGRAM_BOT_USERNAME</code> в `.env`, чтобы включить Telegram Login на публичном домене.</p>
+    {% endif %}
+
+    {% if password_enabled %}
+    {% if telegram_login_available %}<div class="divider">или пароль</div>{% endif %}
+    <form method="post" action="/auth/password" class="form-grid" style="grid-template-columns:1fr">
+      <label>Telegram ID
+        <input type="number" name="telegram_id" required value="{{ bootstrap_magister_id }}">
+      </label>
+      <label>Пароль админки
+        <input type="password" name="password" required autocomplete="current-password">
+      </label>
+      <button type="submit">Войти</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

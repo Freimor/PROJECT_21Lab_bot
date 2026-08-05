@@ -64,6 +64,20 @@ async def submit_community_content(
     return item
 
 
+async def list_moderation_queue(
+    session: AsyncSession,
+    *,
+    limit: int = 100,
+) -> list[ContentItem]:
+    items = await session.scalars(
+        select(ContentItem)
+        .where(ContentItem.status == ContentStatus.MODERATION)
+        .order_by(ContentItem.created_at.asc())
+        .limit(limit)
+    )
+    return list(items)
+
+
 async def moderate_content(
     session: AsyncSession,
     reviewer: User,
@@ -167,7 +181,14 @@ async def choose_interviewee(
         await session.scalars(
             select(User)
             .where(
-                User.staff_role.in_([StaffRole.MAGISTER, StaffRole.TECH_PRIEST, StaffRole.WATCHER]),
+                User.staff_role.in_(
+                    [
+                        StaffRole.LORD,
+                        StaffRole.MAGISTER,
+                        StaffRole.TECH_PRIEST,
+                        StaffRole.WATCHER,
+                    ]
+                ),
                 User.is_active.is_(True),
             )
             .order_by(User.telegram_id)

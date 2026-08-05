@@ -46,9 +46,12 @@ async def bootstrap_database(
             session.add(
                 User(
                     telegram_id=settings.bootstrap_magister_id,
-                    full_name="Магистр",
-                    staff_role=StaffRole.MAGISTER,
+                    full_name="Лорд",
+                    staff_role=StaffRole.LORD,
+                    is_approved=True,
                 )
             )
-        elif user.staff_role is not StaffRole.MAGISTER:
-            user.staff_role = StaffRole.MAGISTER
+        else:
+            if user.staff_role is not StaffRole.LORD:
+                user.staff_role = StaffRole.LORD
+            user.is_approved = True

@@ -17,7 +17,7 @@ from lab21_bot.services.store import (
 
 
 async def test_purchase_reserves_and_cancel_refunds(session: AsyncSession) -> None:
-    magister = User(telegram_id=1, full_name="Магистр", staff_role=StaffRole.MAGISTER)
+    magister = User(telegram_id=1, full_name="Лорд", staff_role=StaffRole.LORD)
     watcher = User(telegram_id=2, full_name="Смотрящий", staff_role=StaffRole.WATCHER)
     buyer = User(telegram_id=3, full_name="Послушник", balance=100)
     session.add_all([magister, watcher, buyer])
@@ -25,6 +25,7 @@ async def test_purchase_reserves_and_cancel_refunds(session: AsyncSession) -> No
     product = await create_product(
         session,
         magister,
+        article="LAB-BADGE",
         name="Значок",
         description="Светящийся PCB-art",
         price=25,
@@ -46,7 +47,7 @@ async def test_purchase_reserves_and_cancel_refunds(session: AsyncSession) -> No
 
 
 async def test_rank_product_grants_adept_after_moderation(session: AsyncSession) -> None:
-    magister = User(telegram_id=10, full_name="Магистр", staff_role=StaffRole.MAGISTER)
+    magister = User(telegram_id=10, full_name="Лорд", staff_role=StaffRole.LORD)
     watcher = User(telegram_id=20, full_name="Смотрящий", staff_role=StaffRole.WATCHER)
     buyer = User(telegram_id=30, full_name="Послушник", balance=10)
     session.add_all([magister, watcher, buyer])
@@ -54,16 +55,18 @@ async def test_rank_product_grants_adept_after_moderation(session: AsyncSession)
     initiation = await create_product(
         session,
         magister,
+        article="LAB-ADEPT",
         name="Стать Адептом",
         description="Подтверждение вклада в лабораторию",
         price=1,
         stock=None,
-        kind=ProductKind.RANK,
+        kind=ProductKind.SERVICE,
         grants_rank=CommunityRank.ADEPT,
     )
     adept_only = await create_product(
         session,
         magister,
+        article="LAB-SECRET",
         name="Тайная награда",
         description="Видна Адептам",
         price=5,

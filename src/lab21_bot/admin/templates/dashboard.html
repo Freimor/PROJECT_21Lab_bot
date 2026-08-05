@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Дашборд — Lab21 Admin{% endblock %}
+{% block content %}
+<h1 class="page-title">Дашборд</h1>
+<p class="page-sub">Сводка по сообществу, витрине и экономике.</p>
+
+<div class="grid">
+  <div class="stat"><div class="label">Участники</div><div class="value">{{ stats.users_total }}</div></div>
+  <div class="stat"><div class="label">Активные</div><div class="value">{{ stats.users_active }}</div></div>
+  <div class="stat"><div class="label">Сумма благодати</div><div class="value">{{ stats.balance_sum }}</div></div>
+  <div class="stat"><div class="label">Заказы в очереди</div><div class="value">{{ stats.orders_pending }}</div></div>
+  <div class="stat"><div class="label">Выданные заказы</div><div class="value">{{ stats.orders_fulfilled }}</div></div>
+  <div class="stat"><div class="label">На модерации</div><div class="value">{{ stats.content_moderation }}</div></div>
+</div>
+
+<div class="panel">
+  <h2>Журнал</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Когда</th><th>Событие</th><th>Детали</th></tr>
+      </thead>
+      <tbody>
+        {% for event in journal %}
+        <tr>
+          <td class="muted">{{ event.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+          <td>{{ event.title }}</td>
+          <td>{{ event.detail }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="muted">Событий пока нет</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -46,6 +46,11 @@ async def _existing_entry(session: AsyncSession, idempotency_key: str | None) ->
     )
 
 
+def _require_participant(user: User) -> None:
+    if user.staff_role is not None:
+        raise EconomyError("У сотрудников нет благодати и респекта")
+
+
 async def change_balance(
     session: AsyncSession,
     actor: User,
@@ -63,9 +68,10 @@ async def change_balance(
         return existing
 
     target = await _locked_user(session, target_id)
+    _require_participant(target)
     delta = amount if grant else -amount
     if target.balance + delta < 0:
-        raise EconomyError("Недостаточно лабкоинов")
+        raise EconomyError("Недостаточно благодати")
     target.balance += delta
     entry = LedgerEntry(
         transaction_group=str(uuid.uuid4()),
@@ -75,6 +81,43 @@ async def change_balance(
         delta=delta,
         balance_after=target.balance,
         entry_type=LedgerType.GRANT if grant else LedgerType.WITHDRAW,
+        reason=reason,
+    )
+    session.add(entry)
+    await session.flush()
+    return entry
+
+
+async def change_respect(
+    session: AsyncSession,
+    actor: User,
+    target_id: int,
+    amount: int,
+    reason: str,
+    *,
+    grant: bool,
+    idempotency_key: str | None = None,
+) -> LedgerEntry:
+    require_permission(actor, Permission.MANAGE_ECONOMY)
+    reason = _validate(amount, reason)
+    existing = await _existing_entry(session, idempotency_key)
+    if existing:
+        return existing
+
+    target = await _locked_user(session, target_id)
+    _require_participant(target)
+    delta = amount if grant else -amount
+    if target.respect + delta < 0:
+        raise EconomyError("Недостаточно респекта")
+    target.respect += delta
+    entry = LedgerEntry(
+        transaction_group=str(uuid.uuid4()),
+        idempotency_key=idempotency_key,
+        initiator_id=actor.telegram_id,
+        account_user_id=target.telegram_id,
+        delta=delta,
+        balance_after=target.respect,
+        entry_type=LedgerType.RESPECT_GRANT if grant else LedgerType.RESPECT_WITHDRAW,
         reason=reason,
     )
     session.add(entry)
@@ -95,7 +138,7 @@ async def transfer(
 ) -> tuple[LedgerEntry, LedgerEntry]:
     reason = _validate(amount, reason)
     if sender_id == recipient_id:
-        raise EconomyError("Нельзя переводить лабкоины самому себе")
+        raise EconomyError("Нельзя переводить благодать самому себе")
     existing = await _existing_entry(session, f"{idempotency_key}:out")
     if existing:
         incoming = await session.scalar(
@@ -113,8 +156,10 @@ async def transfer(
 
     if sender.rank is not CommunityRank.ADEPT or recipient.rank is not CommunityRank.ADEPT:
         raise EconomyError("Переводы доступны только между Адептами")
+    _require_participant(sender)
+    _require_participant(recipient)
     if sender.balance < amount:
-        raise EconomyError("Недостаточно лабкоинов")
+        raise EconomyError("Недостаточно благодати")
 
     now = now or datetime.now(UTC)
     if daily_limit > 0:
@@ -127,7 +172,7 @@ async def transfer(
             )
         )
         if int(transferred or 0) + amount > daily_limit:
-            raise EconomyError(f"Превышен суточный лимит {daily_limit} лабкоинов")
+            raise EconomyError(f"Превышен суточный лимит {daily_limit} благодати")
 
     sender.balance -= amount
     recipient.balance += amount

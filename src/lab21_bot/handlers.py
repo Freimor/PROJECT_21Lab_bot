@@ -6,15 +6,18 @@ from datetime import UTC, datetime
 from typing import Any
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command, CommandStart
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.filters import Command, CommandStart, ExceptionTypeFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
+    ErrorEvent,
     InputMediaDocument,
     InputMediaPhoto,
     InputMediaVideo,
     Message,
+    ReplyKeyboardRemove,
 )
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -25,8 +28,9 @@ from lab21_bot.keyboards import (
     ROLE_LABELS,
     content_actions,
     main_menu,
+    onboarding_keyboard,
     order_actions,
-    products_keyboard,
+    order_confirm_keyboard,
     reboot_confirm_keyboard,
     staff_menu,
 )
@@ -37,6 +41,7 @@ from lab21_bot.models import (
     ContentKind,
     ContentStatus,
     Interview,
+    JoinKind,
     Order,
     OrderStatus,
     Product,
@@ -50,9 +55,16 @@ from lab21_bot.services.access import (
     has_permission,
     list_staff,
     register_user,
+    require_approved,
     require_permission,
     set_staff_role,
 )
+from lab21_bot.services.applications import (
+    ApplicationError,
+    get_pending_application,
+    submit_application,
+)
+from lab21_bot.services.commands import sync_user_commands
 from lab21_bot.services.content import (
     ContentError,
     create_staff_draft,
@@ -61,7 +73,7 @@ from lab21_bot.services.content import (
     record_channel_post,
     submit_community_content,
 )
-from lab21_bot.services.economy import EconomyError, change_balance, history, transfer
+from lab21_bot.services.economy import EconomyError, change_balance, change_respect, history, transfer
 from lab21_bot.services.lifecycle import (
     LifecycleError,
     check_github_updates,
@@ -70,10 +82,10 @@ from lab21_bot.services.lifecycle import (
 from lab21_bot.services.settings import SettingError, get_int_setting, set_int_setting
 from lab21_bot.services.store import (
     create_product,
+    get_product_by_article,
     purchase,
     resolve_order,
     update_product,
-    visible_products,
 )
 
 
@@ -90,7 +102,13 @@ class EditContentState(StatesGroup):
     text = State()
 
 
+class OrderState(StatesGroup):
+    article = State()
+
+
 ROLE_ALIASES = {
+    "lord": StaffRole.LORD,
+    "лорд": StaffRole.LORD,
     "magister": StaffRole.MAGISTER,
     "магистр": StaffRole.MAGISTER,
     "tech_priest": StaffRole.TECH_PRIEST,
@@ -187,14 +205,25 @@ def create_router(
     router = Router(name="lab21")
     albums = AlbumCollector()
 
+    @router.error(ExceptionTypeFilter(AccessDenied))
+    async def access_denied(event: ErrorEvent) -> None:
+        text = str(event.exception)
+        update = event.update
+        if update.callback_query is not None:
+            await update.callback_query.answer(text, show_alert=True)
+            return
+        if update.message is not None:
+            await update.message.answer(text)
+
     async def current_user(session: AsyncSession, telegram_id: int) -> User:
         user = await session.get(User, telegram_id)
         if user is None:
             raise AccessDenied("Сначала запустите бота командой /start")
+        require_approved(user)
         return user
 
     @router.message(CommandStart())
-    async def start(message: Message) -> None:
+    async def start(message: Message, bot: Bot) -> None:
         if not message.from_user:
             return
         async with factory.begin() as session:
@@ -204,18 +233,103 @@ def create_router(
                 message.from_user.full_name,
                 message.from_user.username,
             )
+            approved = user.is_approved
+            pending = None if approved else await get_pending_application(session, user.telegram_id)
+            telegram_id = user.telegram_id
+        async with factory() as session:
+            user = await session.get(User, telegram_id)
+            assert user is not None
+            await sync_user_commands(bot, user)
+            if approved:
+                await message.answer(
+                    "Омниссия узнала вас. Связь восстановлена.\n"
+                    "Благодать и хроники лаборатории — к вашим услугам.",
+                    reply_markup=ReplyKeyboardRemove(),
+                )
+                await message.answer("Панель управления:", reply_markup=main_menu(user))
+                return
+            if pending is not None:
+                await message.answer(
+                    "Твое прошение будет рассмотрено",
+                    reply_markup=ReplyKeyboardRemove(),
+                )
+                return
             await message.answer(
-                "Связь с машинным контуром установлена.\n"
-                "Здесь хранятся лабкоины, награды и истории сообщества.",
-                reply_markup=main_menu(user),
+                "Лишь смелый способен узреть величие бога нашего Омниссии, "
+                "пройти путь не веры но знания и быть достойным его благодати. "
+                "Скажи, смертный, кто ты?",
+                reply_markup=ReplyKeyboardRemove(),
             )
+            await message.answer("Выбери путь:", reply_markup=onboarding_keyboard())
+
+    @router.message(F.text.casefold() == "приклониться")
+    async def legacy_bow_button(message: Message, bot: Bot) -> None:
+        await start(message, bot)
+
+    @router.callback_query(F.data.in_({"join:community", "join:staff"}))
+    async def choose_join_path(callback: CallbackQuery, bot: Bot) -> None:
+        if callback.from_user is None or callback.data is None:
+            return
+        kind = JoinKind.STAFF if callback.data.endswith("staff") else JoinKind.COMMUNITY
+        try:
+            async with factory.begin() as session:
+                user = await register_user(
+                    session,
+                    callback.from_user.id,
+                    callback.from_user.full_name,
+                    callback.from_user.username,
+                )
+                if user.is_approved:
+                    await sync_user_commands(bot, user)
+                    await callback.answer("Вы уже приняты")
+                    if isinstance(callback.message, Message):
+                        await callback.message.answer(
+                            "Доступ уже открыт.",
+                            reply_markup=main_menu(user),
+                        )
+                    return
+                application = await submit_application(
+                    session,
+                    user,
+                    kind,
+                    expire_days=settings.application_expire_days,
+                )
+                application_id = application.id
+                expires_at = application.expires_at
+                full_name = user.full_name
+                username = user.username
+                telegram_id = user.telegram_id
+        except ApplicationError as exc:
+            await callback.answer(str(exc), show_alert=True)
+            return
+
+        kind_label = "сотрудник" if kind is JoinKind.STAFF else "послушник"
+        admin_path = "staff" if kind is JoinKind.STAFF else "adepts"
+        notify_text = (
+            "Новая заявка на вступление.\n"
+            f"Тип: {kind_label}\n"
+            f"{full_name}" + (f" (@{username})" if username else "") + f"\nID: {telegram_id}\n"
+            f"Заявка #{application_id}\n"
+            f"Автоотказ: {expires_at:%d.%m.%Y}\n"
+            f"Админка: {settings.admin_base_url.rstrip('/')}/{admin_path}"
+        )
+        try:
+            await bot.send_message(settings.staff_chat_id, notify_text)
+        except (TelegramBadRequest, TelegramForbiddenError):
+            pass
+
+        await callback.answer()
+        if isinstance(callback.message, Message):
+            await callback.message.edit_reply_markup(reply_markup=None)
+            await callback.message.answer("Твое прошение будет рассмотрено")
 
     @router.message(Command("menu"))
-    async def show_menu(message: Message) -> None:
+    async def show_menu(message: Message, bot: Bot) -> None:
         if not message.from_user:
             return
         async with factory() as session:
             user = await current_user(session, message.from_user.id)
+            await sync_user_commands(bot, user)
             await message.answer("Панель управления:", reply_markup=main_menu(user))
 
     @router.callback_query(F.data == "menu:balance")
@@ -226,8 +340,15 @@ def create_router(
             return
         async with factory() as session:
             user = await current_user(session, telegram_user.id)
-            label = "Адепт" if user.rank is CommunityRank.ADEPT else "Послушник"
-            text = f"Ранг: {label}\nБаланс: {user.balance} лабкоинов"
+            if user.staff_role is not None:
+                text = "У сотрудников нет благодати и респекта."
+            else:
+                label = "Адепт" if user.rank is CommunityRank.ADEPT else "Послушник"
+                text = (
+                    f"Ранг: {label}\n"
+                    f"Благодать: {user.balance}\n"
+                    f"Респект: {user.respect}"
+                )
         if isinstance(event, CallbackQuery):
             await event.answer()
             if event.message:
@@ -247,28 +368,66 @@ def create_router(
             ]
         await message.answer("\n".join(lines) if lines else "История пока пуста.")
 
-    @router.callback_query(F.data == "menu:shop")
-    @router.message(Command("shop"))
-    async def show_shop(event: Message | CallbackQuery) -> None:
+    @router.callback_query(F.data == "menu:order")
+    @router.message(Command("order"))
+    async def start_order(event: Message | CallbackQuery, state: FSMContext) -> None:
         if event.from_user is None:
             return
         async with factory() as session:
-            user = await current_user(session, event.from_user.id)
-            products = await visible_products(session, user)
-        text = "Доступные награды:" if products else "Для вашего ранга наград пока нет."
-        markup = products_keyboard(products) if products else None
+            await current_user(session, event.from_user.id)
+        await state.set_state(OrderState.article)
+        text = (
+            "Введи артикул товара из витрины в чате группы.\n"
+            "Пример: LAB-001"
+        )
         if isinstance(event, CallbackQuery):
             await event.answer()
             if event.message:
-                await event.message.answer(text, reply_markup=markup)
+                await event.message.answer(text)
         else:
-            await event.answer(text, reply_markup=markup)
+            await event.answer(text)
+
+    @router.message(OrderState.article)
+    async def order_by_article(message: Message, state: FSMContext) -> None:
+        if not message.from_user:
+            return
+        article = (message.text or "").strip()
+        if not article or article.startswith("/"):
+            await message.answer("Пришли артикул текстом, например LAB-001")
+            return
+        async with factory() as session:
+            await current_user(session, message.from_user.id)
+            product = await get_product_by_article(session, article)
+            if product is None or not product.is_visible:
+                await message.answer("Товар с таким артикулом не найден.")
+                return
+            stock_line = "∞" if product.stock is None else str(product.stock)
+            text = (
+                f"Артикул: {product.article}\n"
+                f"{product.name}\n"
+                f"{product.description}\n"
+                f"Цена: {product.price} благодати\n"
+                f"Остаток: {stock_line}"
+            )
+            markup = order_confirm_keyboard(product)
+        await state.clear()
+        await message.answer(text, reply_markup=markup)
+
+    @router.callback_query(F.data == "order:cancel_draft")
+    async def cancel_order_draft(callback: CallbackQuery, state: FSMContext) -> None:
+        await state.clear()
+        await callback.answer("Отменено")
+        if callback.message:
+            await callback.message.edit_reply_markup(reply_markup=None)
 
     @router.callback_query(F.data.startswith("buy:"))
     async def buy_product(callback: CallbackQuery, bot: Bot) -> None:
-        product_id = int(callback.data.split(":")[-1])  # type: ignore[union-attr]
+        if callback.from_user is None or callback.data is None:
+            return
+        product_id = int(callback.data.split(":")[-1])
         try:
             async with factory.begin() as session:
+                await current_user(session, callback.from_user.id)
                 order = await purchase(
                     session,
                     callback.from_user.id,
@@ -279,18 +438,25 @@ def create_router(
                 assert product is not None
                 buyer = await session.get(User, callback.from_user.id)
                 assert buyer is not None
+                article = product.article
+                product_name = product.name
+                buyer_name = buyer.full_name
+                buyer_id = buyer.telegram_id
+                order_id = order.id
+                total_price = order.total_price
+                order_actions_markup = order_actions(order)
             await callback.answer("Заказ создан")
             if callback.message:
                 await callback.message.answer(
-                    f"Заказ #{order.id} создан. Зарезервировано {order.total_price} 🪙."
+                    f"Заказ #{order_id} создан. Зарезервировано {total_price} благодати."
                 )
             await bot.send_message(
                 settings.staff_chat_id,
-                f"Новый заказ #{order.id}: {product.name}\n"
-                f"Покупатель: {buyer.full_name} ({buyer.telegram_id})",
-                reply_markup=order_actions(order),
+                f"Новый заказ #{order_id}: [{article}] {product_name}\n"
+                f"Покупатель: {buyer_name} ({buyer_id})",
+                reply_markup=order_actions_markup,
             )
-        except EconomyError as error:
+        except (EconomyError, AccessDenied) as error:
             await callback.answer(str(error), show_alert=True)
 
     @router.message(Command("transfer"))
@@ -318,7 +484,7 @@ def create_router(
                     daily_limit,
                     idempotency_key=f"message:{message.chat.id}:{message.message_id}",
                 )
-            await message.answer(f"Передано {amount} лабкоинов.")
+            await message.answer(f"Передано {amount} благодати.")
         except (ValueError, EconomyError) as error:
             await message.answer(str(error))
 
@@ -345,7 +511,35 @@ def create_router(
                     idempotency_key=f"message:{message.chat.id}:{message.message_id}",
                 )
             await message.answer(
-                f"Проводка выполнена: {entry.delta:+d} 🪙. Баланс: {entry.balance_after}."
+                f"Благодать: {entry.delta:+d}. Итого: {entry.balance_after}."
+            )
+        except (ValueError, EconomyError, AccessDenied) as error:
+            await message.answer(str(error))
+
+    @router.message(Command("respect_grant", "respect_withdraw"))
+    async def respect_admin(message: Message) -> None:
+        if not message.from_user:
+            return
+        parts = (message.text or "").split(maxsplit=3)
+        if len(parts) < 4:
+            await message.answer("Формат: /respect_grant TELEGRAM_ID СУММА ПРИЧИНА")
+            return
+        try:
+            target_id, amount = int(parts[1]), int(parts[2])
+            grant = parts[0].split("@")[0] == "/respect_grant"
+            async with factory.begin() as session:
+                actor = await current_user(session, message.from_user.id)
+                entry = await change_respect(
+                    session,
+                    actor,
+                    target_id,
+                    amount,
+                    parts[3],
+                    grant=grant,
+                    idempotency_key=f"message:{message.chat.id}:{message.message_id}",
+                )
+            await message.answer(
+                f"Респект: {entry.delta:+d}. Итого: {entry.balance_after}."
             )
         except (ValueError, EconomyError, AccessDenied) as error:
             await message.answer(str(error))
@@ -363,7 +557,9 @@ def create_router(
                 await message.answer("Служебное меню:", reply_markup=staff_menu(actor))
             return
         if len(parts) != 3 or parts[2].lower() not in ROLE_ALIASES:
-            await message.answer("Формат: /staff TELEGRAM_ID magister|tech_priest|watcher|none")
+            await message.answer(
+                "Формат: /staff TELEGRAM_ID lord|magister|tech_priest|watcher|none"
+            )
             return
         try:
             async with factory.begin() as session:
@@ -462,7 +658,7 @@ def create_router(
         try:
             async with factory() as session:
                 actor = await current_user(session, event.from_user.id)
-                require_permission(actor, Permission.MANAGE_SETTINGS)
+                require_permission(actor, Permission.MANAGE_SYSTEM)
             status = await check_github_updates(settings)
             text = (
                 "Перезагрузка остановит бота, затем watchdog проверит GitHub "
@@ -520,7 +716,7 @@ def create_router(
         try:
             async with factory() as session:
                 actor = await current_user(session, message.from_user.id)
-                require_permission(actor, Permission.MANAGE_SETTINGS)
+                require_permission(actor, Permission.MANAGE_SYSTEM)
             status = await check_github_updates(settings)
             text = status.message
             if status.compare_url:
@@ -790,7 +986,7 @@ def create_router(
                 await callback.message.answer("Необработанных заказов нет.")
             for order in orders:
                 await callback.message.answer(
-                    f"Заказ #{order.id}: {order.product.name}, {order.total_price} 🪙",
+                    f"Заказ #{order.id}: {order.product.name}, {order.total_price} благодати",
                     reply_markup=order_actions(order),
                 )
 
@@ -800,50 +996,35 @@ def create_router(
             return
         raw = (message.text or "").partition(" ")[2]
         parts = [part.strip() for part in raw.split("|")]
-        if len(parts) < 4:
+        if len(parts) < 5:
             await message.answer(
-                "Формат: /product название | описание | цена | остаток/inf | "
-                "novice/adept | physical/service/rank | выдаваемый_ранг"
+                "Формат: /product артикул | название | описание | цена | остаток/inf | "
+                "novice/adept | merch/device/service"
             )
             return
         try:
-            price = int(parts[2])
-            stock = None if parts[3].lower() == "inf" else int(parts[3])
-            min_rank = CommunityRank(parts[4]) if len(parts) > 4 else CommunityRank.NOVICE
-            kind = ProductKind(parts[5]) if len(parts) > 5 else ProductKind.PHYSICAL
-            grants = CommunityRank(parts[6]) if len(parts) > 6 and parts[6] else None
+            price = int(parts[3])
+            stock = None if parts[4].lower() == "inf" else int(parts[4])
+            min_rank = CommunityRank(parts[5]) if len(parts) > 5 else CommunityRank.NOVICE
+            kind = ProductKind(parts[6]) if len(parts) > 6 else ProductKind.MERCH
             async with factory.begin() as session:
                 actor = await current_user(session, message.from_user.id)
                 product = await create_product(
                     session,
                     actor,
-                    name=parts[0],
-                    description=parts[1],
+                    article=parts[0],
+                    name=parts[1],
+                    description=parts[2],
                     price=price,
                     stock=stock,
                     min_rank=min_rank,
                     kind=kind,
-                    grants_rank=grants,
                 )
-            await message.answer(f"Награда #{product.id} создана.")
+                article = product.article
+                product_id = product.id
+            await message.answer(f"Товар [{article}] #{product_id} создан.")
         except (ValueError, EconomyError, AccessDenied) as error:
             await message.answer(str(error))
-
-    @router.callback_query(F.data == "staff:store")
-    async def store_admin_help(callback: CallbackQuery) -> None:
-        async with factory() as session:
-            actor = await current_user(session, callback.from_user.id)
-            require_permission(actor, Permission.MANAGE_STORE)
-        await callback.answer()
-        if callback.message:
-            await callback.message.answer(
-                "Добавление награды:\n"
-                "/product название | описание | цена | остаток/inf | "
-                "novice/adept | physical/service/rank | выдаваемый_ранг\n\n"
-                "Посвящение: kind=rank, выдаваемый_ранг=adept.\n\n"
-                "Изменение: /product_edit ID поле значение\n"
-                "Поля: name, description, price, stock, visible, min_rank."
-            )
 
     @router.message(Command("product_edit"))
     async def product_edit_command(message: Message) -> None:
@@ -863,7 +1044,9 @@ def create_router(
                     parts[2],
                     parts[3],
                 )
-            await message.answer(f"Награда #{product.id} обновлена.")
+                article = product.article
+                product_id = product.id
+            await message.answer(f"Товар [{article}] #{product_id} обновлён.")
         except (ValueError, EconomyError, AccessDenied) as error:
             await message.answer(str(error))
 

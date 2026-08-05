@@ -136,7 +136,7 @@ async def request_restart(
     reason: str,
     update_status: UpdateStatus | None = None,
 ) -> RestartRequest:
-    require_permission(actor, Permission.MANAGE_SETTINGS)
+    require_permission(actor, Permission.MANAGE_SYSTEM)
     try:
         await asyncio.to_thread(_prepare_control_dir, settings.control_dir)
     except OSError as error:

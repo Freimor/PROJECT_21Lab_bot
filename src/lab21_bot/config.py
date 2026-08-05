@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     reminder_window_start: int = Field(default=12, ge=0, le=23)
     reminder_window_end: int = Field(default=20, ge=1, le=24)
     transfer_daily_limit: int = Field(default=100, ge=0)
+    application_expire_days: int = Field(default=7, ge=1, le=90)
+    upload_dir: str = "/app/uploads"
     log_level: str = "INFO"
 
     control_dir: str = "/control"
@@ -41,6 +43,14 @@ class Settings(BaseSettings):
     github_repo: str = "Freimor/PROJECT_21Lab_bot"
     github_branch: str = "main"
     github_token: SecretStr | None = None
+
+    admin_enabled: bool = True
+    admin_host: str = "0.0.0.0"
+    admin_port: int = Field(default=8080, ge=1, le=65535)
+    admin_base_url: str = "http://localhost:8080"
+    admin_session_secret: SecretStr | None = None
+    admin_password: SecretStr | None = None
+    telegram_bot_username: str | None = None
 
     @field_validator("llm_provider")
     @classmethod
@@ -53,6 +63,13 @@ class Settings(BaseSettings):
     @property
     def tz(self) -> ZoneInfo:
         return ZoneInfo(self.timezone)
+
+    @property
+    def session_secret(self) -> str:
+        if self.admin_session_secret is not None:
+            return self.admin_session_secret.get_secret_value()
+        # Dev fallback: stable secret derived from bot token.
+        return f"lab21-admin:{self.telegram_bot_token.get_secret_value()}"
 
 
 @lru_cache

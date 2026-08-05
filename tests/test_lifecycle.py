@@ -48,9 +48,10 @@ async def test_check_github_updates_detects_new_commit(tmp_path: Path) -> None:
 
 
 async def test_request_restart_writes_signal(session: AsyncSession, tmp_path: Path) -> None:
-    magister = User(telegram_id=1, full_name="Магистр", staff_role=StaffRole.MAGISTER)
+    lord = User(telegram_id=1, full_name="Лорд", staff_role=StaffRole.LORD)
+    magister = User(telegram_id=3, full_name="Магистр", staff_role=StaffRole.MAGISTER)
     watcher = User(telegram_id=2, full_name="Смотрящий", staff_role=StaffRole.WATCHER)
-    session.add_all([magister, watcher])
+    session.add_all([lord, magister, watcher])
     await session.flush()
     cfg = settings(tmp_path)
     status = UpdateStatus(
@@ -63,10 +64,12 @@ async def test_request_restart_writes_signal(session: AsyncSession, tmp_path: Pa
 
     with pytest.raises(AccessDenied):
         await request_restart(session, watcher, cfg, reason="nope", update_status=status)
+    with pytest.raises(AccessDenied):
+        await request_restart(session, magister, cfg, reason="nope", update_status=status)
 
     request = await request_restart(
         session,
-        magister,
+        lord,
         cfg,
         reason="manual",
         update_status=status,
@@ -80,7 +83,7 @@ async def test_request_restart_writes_signal(session: AsyncSession, tmp_path: Pa
     with pytest.raises(LifecycleError):
         await request_restart(
             session,
-            magister,
+            lord,
             cfg,
             reason="duplicate",
             update_status=status,

@@ -13,10 +13,15 @@ dependencies = [
     "alembic==1.18.5",
     "apscheduler==3.11.3",
     "asyncpg==0.31.0",
+    "fastapi==0.135.1",
     "httpx==0.28.1",
+    "itsdangerous==2.2.0",
+    "jinja2==3.1.6",
     "pydantic-settings==2.14.2",
+    "python-multipart==0.0.22",
     "sqlalchemy[asyncio]==2.0.51",
     "structlog==26.1.0",
+    "uvicorn[standard]==0.41.0",
 ]
 
 [project.optional-dependencies]
@@ -30,9 +35,13 @@ dev = [
 
 [project.scripts]
 lab21-bot = "lab21_bot.main:run"
+lab21-admin = "lab21_bot.admin.app:run"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+lab21_bot = ["admin/templates/*.html", "admin/static/*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

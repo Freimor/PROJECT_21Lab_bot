@@ -50,7 +50,7 @@ async def test_community_content_is_attributed_and_moderated(
 async def test_channel_silence_and_interview_rotation(session: AsyncSession) -> None:
     now = datetime.now(UTC)
     channel_id = -100123
-    first = User(telegram_id=10, full_name="Магистр", staff_role=StaffRole.MAGISTER)
+    first = User(telegram_id=10, full_name="Лорд", staff_role=StaffRole.LORD)
     second = User(telegram_id=20, full_name="Смотрящий", staff_role=StaffRole.WATCHER)
     session.add_all([first, second])
     await session.flush()

@@ -5,11 +5,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lab21_bot.models import CommunityRank, LedgerEntry, StaffRole, User
-from lab21_bot.services.economy import EconomyError, change_balance, transfer
+from lab21_bot.services.economy import EconomyError, change_balance, change_respect, transfer
 
 
 async def test_grant_withdraw_and_idempotency(session: AsyncSession) -> None:
-    actor = User(telegram_id=1, full_name="Магистр", staff_role=StaffRole.MAGISTER)
+    actor = User(telegram_id=1, full_name="Лорд", staff_role=StaffRole.LORD)
     target = User(telegram_id=2, full_name="Адепт")
     session.add_all([actor, target])
     await session.flush()
@@ -125,3 +125,46 @@ async def test_transfer_is_idempotent(session: AsyncSession) -> None:
     assert first[0].id == second[0].id
     assert sender.balance == 30
     assert recipient.balance == 10
+
+
+async def test_respect_grant_withdraw_no_transfer(session: AsyncSession) -> None:
+    actor = User(telegram_id=1, full_name="Лорд", staff_role=StaffRole.LORD)
+    target = User(telegram_id=2, full_name="Адепт", is_approved=True)
+    session.add_all([actor, target])
+    await session.flush()
+
+    await change_respect(
+        session,
+        actor,
+        target.telegram_id,
+        10,
+        "За вклад",
+        grant=True,
+        idempotency_key="respect-1",
+    )
+    assert target.respect == 10
+    assert target.balance == 0
+
+    await change_respect(
+        session,
+        actor,
+        target.telegram_id,
+        3,
+        "Коррекция",
+        grant=False,
+        idempotency_key="respect-2",
+    )
+    assert target.respect == 7
+
+    staff = User(telegram_id=3, full_name="Смотрящий", staff_role=StaffRole.WATCHER)
+    session.add(staff)
+    await session.flush()
+    with pytest.raises(EconomyError, match="сотрудников"):
+        await change_respect(
+            session,
+            actor,
+            staff.telegram_id,
+            1,
+            "Нельзя",
+            grant=True,
+        )

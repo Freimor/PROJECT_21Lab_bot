@@ -8,7 +8,6 @@ from typing import Any
 import structlog
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import BotCommand
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from lab21_bot.config import Settings, get_settings
@@ -76,19 +75,9 @@ async def main() -> None:
     dispatcher.include_router(create_router(settings, factory, llm))
     scheduler = create_scheduler(bot, settings, factory)
 
-    await bot.set_my_commands(
-        [
-            BotCommand(command="menu", description="Главное меню"),
-            BotCommand(command="balance", description="Баланс и ранг"),
-            BotCommand(command="history", description="История лабкоинов"),
-            BotCommand(command="shop", description="Витрина наград"),
-            BotCommand(command="transfer", description="Передать лабкоины"),
-            BotCommand(command="staff", description="Служебное меню"),
-            BotCommand(command="post", description="Создать пост"),
-            BotCommand(command="reboot", description="Перезагрузка и обновление"),
-            BotCommand(command="update_status", description="Проверить обновления GitHub"),
-        ]
-    )
+    from lab21_bot.services.commands import clear_default_commands
+
+    await clear_default_commands(bot)
     scheduler.start()
     await notify_restart_result(bot, factory, settings)
     log.info(

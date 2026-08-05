@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Магазин — Lab21 Admin{% endblock %}
+{% block content %}
+<h1 class="page-title">Магазин</h1>
+<p class="page-sub">Каталог товаров и очередь заказов.</p>
+
+{% if can_store %}
+<div class="panel">
+  <h2>Новый товар</h2>
+  <form method="post" action="/shop/products/create" enctype="multipart/form-data" class="form-grid">
+    <label>Артикул<input name="article" required placeholder="LAB-001"></label>
+    <label>Название<input name="name" required></label>
+    <label>Цена (благодать)<input type="number" name="price" min="0" required></label>
+    <label>Остаток (число или inf)<input name="stock" value="inf"></label>
+    <label>Мин. ранг
+      <select name="min_rank">
+        {% for rank in ranks %}<option value="{{ rank.value }}">{{ rank_labels.get(rank.value, rank.value) }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Тип
+      <select name="kind">
+        {% for kind in kinds %}<option value="{{ kind.value }}">{{ kind_labels.get(kind.value, kind.value) }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Фото<input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+    <label style="grid-column:1/-1">Описание<textarea name="description" required></textarea></label>
+    <div class="actions"><button type="submit">Добавить</button></div>
+  </form>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Товары</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th></th><th>Артикул</th><th>Название</th><th>Цена</th><th>Остаток</th>
+          <th>Ранг</th><th>Тип</th><th>Видимость</th>
+          {% if can_store %}<th>Правка</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in products %}
+        <tr>
+          <td>
+            {% if product.image_path %}
+            <img class="product-thumb" src="/uploads/{{ product.image_path }}" alt="">
+            {% else %}
+            <div class="product-thumb product-thumb-empty">нет</div>
+            {% endif %}
+          </td>
+          <td><code>{{ product.article }}</code></td>
+          <td>
+            <strong>{{ product.name }}</strong>
+            <div class="muted">#{{ product.id }} · {{ product.description }}</div>
+          </td>
+          <td>{{ product.price }}</td>
+          <td>{% if product.stock is none %}∞{% else %}{{ product.stock }}{% endif %}</td>
+          <td>{{ rank_labels.get(product.min_rank.value, product.min_rank.value) }}</td>
+          <td>{{ kind_labels.get(product.kind.value, product.kind.value) }}</td>
+          <td>{% if product.is_visible %}да{% else %}нет{% endif %}</td>
+          {% if can_store %}
+          <td>
+            <form method="post" action="/shop/products/{{ product.id }}/edit" class="inline-edit">
+              <select name="field">
+                <option value="article">article</option>
+                <option value="name">name</option>
+                <option value="description">description</option>
+                <option value="price">price</option>
+                <option value="stock">stock</option>
+                <option value="visible">visible</option>
+                <option value="min_rank">min_rank</option>
+                <option value="kind">kind</option>
+              </select>
+              <input name="value" required placeholder="значение">
+              <button type="submit" class="secondary">OK</button>
+            </form>
+            <form method="post" action="/shop/products/{{ product.id }}/image" enctype="multipart/form-data" class="inline-edit" style="margin-top:0.4rem">
+              <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif" required>
+              <button type="submit" class="secondary">Фото</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr><td colspan="{% if can_store %}9{% else %}8{% endif %}" class="muted">Товаров пока нет</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if can_orders %}
+<div class="panel">
+  <h2>Заказы</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Покупатель</th><th>Товар</th><th>Кол-во</th><th>Сумма</th><th>Создан</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+        <tr>
+          <td>{{ order.id }}</td>
+          <td>{{ order.buyer_id }}</td>
+          <td>
+            {% if order.product %}
+            [{{ order.product.article }}] {{ order.product.name }}
+            {% else %}
+            #{{ order.product_id }}
+            {% endif %}
+          </td>
+          <td>{{ order.quantity }}</td>
+          <td>{{ order.total_price }}</td>
+          <td>{{ order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else '—' }}</td>
+          <td class="actions">
+            <form method="post" action="/shop/orders/{{ order.id }}/resolve">
+              <input type="hidden" name="approve" value="1">
+              <button type="submit">Выдать</button>
+            </form>
+            <form method="post" action="/shop/orders/{{ order.id }}/resolve">
+              <input type="hidden" name="approve" value="0">
+              <button type="submit" class="danger">Отменить</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">Очередь пуста</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
