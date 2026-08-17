@@ -1,0 +1,43 @@
+{
+  "defaults": {
+    "content_silence_days": 3,
+    "reminder_hour": 14,
+    "reminder_window_start": 12,
+    "reminder_window_end": 20,
+    "transfer_daily_limit": 100,
+    "application_expire_days": 7,
+    "memes_enabled": 1,
+    "interview_enabled": 1,
+    "teasers_enabled": 1,
+    "meme_interval_hours": 6,
+    "grace_refill_percent": 5,
+    "grace_decay_percent": 5,
+    "ritual_grace": 3,
+    "ritual_streak_bonus_grace": 7,
+    "ritual_reply_ttl_seconds": 10,
+    "mention_cooldown_seconds": 60,
+    "bless_daily_limit": 1,
+    "bless_pair_cooldown_days": 7,
+    "flavor_chance_percent": 25,
+    "season_reminder_days": 3
+  },
+  "ranges": {
+    "content_silence_days": [1, 90],
+    "reminder_hour": [0, 23],
+    "transfer_daily_limit": [0, 1000000],
+    "memes_enabled": [0, 1],
+    "interview_enabled": [0, 1],
+    "teasers_enabled": [0, 1],
+    "meme_interval_hours": [1, 168],
+    "grace_refill_percent": [1, 100],
+    "grace_decay_percent": [1, 100],
+    "ritual_grace": [0, 100],
+    "ritual_streak_bonus_grace": [0, 500],
+    "ritual_reply_ttl_seconds": [1, 120],
+    "mention_cooldown_seconds": [0, 3600],
+    "bless_daily_limit": [0, 50],
+    "bless_pair_cooldown_days": [0, 90],
+    "flavor_chance_percent": [0, 100],
+    "season_reminder_days": [1, 14]
+  }
+}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "publications_nav.html" import pub_tabs %}
+{% from "placeholder_legend.html" import placeholder_legend %}
+{% block title %}Тизеры — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Тизеры</h1>
+<p class="page-sub">Шаблоны тизеров во флудилку.</p>
+{{ pub_tabs(pub_section, can_settings, can_queue, badges) }}
+
+<div class="panel">
+  <h2>Написать тизер</h2>
+  <form method="post" action="/publications/teasers/create" class="form-grid">
+    <label>Название
+      <input name="title" maxlength="160" placeholder="Тизер">
+    </label>
+    <div class="token-field" style="grid-column:1/-1">
+      <label>Текст
+        <textarea name="body" required rows="3" placeholder="Текст тизера"></textarea>
+      </label>
+      {{ placeholder_legend(teaser_placeholders) }}
+    </div>
+    <div class="actions"><button type="submit">Добавить</button></div>
+  </form>
+</div>
+
+<div class="meme-table-wrap">
+  <div class="meme-table-head">
+    <a
+      class="meme-sort"
+      href="/publications/teasers?sort={{ 'asc' if newest_first else 'desc' }}"
+      title="{{ 'Сначала старые' if newest_first else 'Сначала новые' }}"
+    >
+      Дата
+      <span class="meme-sort-dir" aria-hidden="true">{{ '↓' if newest_first else '↑' }}</span>
+    </a>
+  </div>
+
+  {% if teasers %}
+  <div class="meme-table teaser-table">
+    {% for tpl in teasers %}
+    <details class="meme-tr">
+      <summary>
+        <span class="meme-react">{% if tpl.is_active %}on{% else %}off{% endif %}</span>
+        <span class="meme-preview">{{ tpl.body[:40] }}{% if tpl.body|length > 40 %}…{% endif %}</span>
+        <span class="meme-author">{{ tpl.title }}</span>
+        <span class="meme-date">{{ tpl.created_at.strftime('%d.%m.%y') if tpl.created_at else '—' }}</span>
+      </summary>
+      <div class="meme-body">
+        <form method="post" action="/publications/teasers/{{ tpl.id }}/update" class="form-grid">
+          <label>Название
+            <input name="title" value="{{ tpl.title }}" maxlength="160" required>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" name="is_active" value="1" {% if tpl.is_active %}checked{% endif %}>
+            Активен
+          </label>
+          <div class="token-field" style="grid-column:1/-1">
+            <label>Текст
+              <textarea name="body" rows="3" required>{{ tpl.body }}</textarea>
+            </label>
+            {{ placeholder_legend(teaser_placeholders) }}
+          </div>
+          <div class="actions">
+            <button type="submit">Сохранить</button>
+          </div>
+        </form>
+        <form method="post" action="/publications/teasers/{{ tpl.id }}/delete" style="margin-top:0.5rem">
+          <button type="submit" class="danger">Удалить тизер</button>
+        </form>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="panel muted" style="margin:0;border-radius:0 0 var(--radius) var(--radius)">Тизеров пока нет.</div>
+  {% endif %}
+</div>
+{% endblock %}

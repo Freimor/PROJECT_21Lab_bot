@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% from "publications_nav.html" import pub_tabs %}
+{% block title %}Публикации — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Публикации</h1>
+<p class="page-sub">Два этапа: одобрение исходника → генерация LLM → правка и публикация.</p>
+{{ pub_tabs(pub_section, can_settings, can_queue, badges) }}
+
+<div class="grid">
+  <div class="stat">
+    <div class="label">Тишина Будней</div>
+    <div class="value">{% if stats.silence_days is none %}—{% else %}{{ stats.silence_days }}д{% endif %}</div>
+  </div>
+  <div class="stat">
+    <div class="label">В очереди</div>
+    <div class="value">{{ stats.queue_total }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Будни / Важное</div>
+    <div class="value" style="font-size:1.1rem">
+      {{ stats.queue_counts.get('story', 0) }} /
+      {{ stats.queue_counts.get('important', 0) }}
+    </div>
+  </div>
+  <div class="stat">
+    <div class="label">Мемы на проверке</div>
+    <div class="value">
+      {% if stats.queue_memes %}
+      <a href="/publications/memes">{{ stats.queue_memes }} →</a>
+      {% else %}
+      0
+      {% endif %}
+    </div>
+  </div>
+  <div class="stat">
+    <div class="label">В расписании</div>
+    <div class="value">{{ stats.scheduled_count }}</div>
+  </div>
+</div>
+
+{% if can_queue %}
+<h2 class="section-title">Очередь заявок</h2>
+{% for item in items %}
+<div class="panel" id="item-{{ item.id }}">
+  <div class="actions" style="justify-content:space-between;margin-bottom:0.75rem">
+    <div>
+      <strong>#{{ item.id }}</strong>
+      <span class="badge">{{ kind_labels.get(item.kind.value, item.kind.value) }}</span>
+      {% if item.llm_processed %}
+      <span class="badge">LLM готов</span>
+      {% else %}
+      <span class="badge">Исходник</span>
+      {% endif %}
+      ·
+      {% if item.author %}
+        {{ item.author.full_name }}
+        {% if item.author.username %}(@{{ item.author.username }}){% endif %}
+      {% else %}
+        ID {{ item.author_id }}
+      {% endif %}
+    </div>
+    <span class="muted">{{ item.created_at.strftime('%d.%m.%Y %H:%M') if item.created_at else '' }}</span>
+  </div>
+
+  <h3 style="margin:0 0 0.35rem;font-size:0.9rem;color:var(--muted)">Оригинал автора (только чтение)</h3>
+  <pre class="source-block">{{ item.source_text }}</pre>
+  {% if item.media %}
+  <div class="meme-media" style="margin-top:0.55rem">
+    {% for media in item.media %}
+      {% if media.type == 'photo' %}
+      <a href="/publications/{{ item.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">
+        <img
+          class="meme-thumb"
+          src="/publications/{{ item.id }}/media/{{ loop.index0 }}"
+          alt="Фото заявки"
+          loading="lazy"
+        >
+      </a>
+      {% elif media.type == 'animation' %}
+      <a href="/publications/{{ item.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">
+        <video
+          class="meme-thumb"
+          src="/publications/{{ item.id }}/media/{{ loop.index0 }}"
+          autoplay
+          muted
+          loop
+          playsinline
+        ></video>
+      </a>
+      {% else %}
+      <span class="muted">{{ media.type or 'файл' }}</span>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if not item.llm_processed %}
+  <form method="post" class="actions js-llm-generate" style="margin-top:0.75rem;gap:0.5rem;flex-wrap:wrap">
+    <button type="submit" formaction="/publications/{{ item.id }}/generate">
+      Одобрить и сгенерировать LLM
+    </button>
+    <button
+      type="button"
+      class="danger js-reject-open"
+      data-action="/publications/{{ item.id }}/reject"
+      data-preview-id="reject-preview-{{ item.id }}"
+    >Отклонить</button>
+    <p class="muted span-all" style="margin:0;flex-basis:100%">Генерация на CPU может занять несколько минут — не закрывайте страницу.</p>
+  </form>
+  {% else %}
+  <form method="post" class="form-grid" style="margin-top:0.75rem">
+    <label style="grid-column:1/-1">Вариант для публикации (можно править)
+      <textarea name="draft_text" rows="8" id="draft-{{ item.id }}">{{ item.draft_text or '' }}</textarea>
+    </label>
+    <label>Запланировать на ({{ timezone }})
+      <input type="datetime-local" name="scheduled_at">
+    </label>
+    <div class="actions" style="grid-column:1/-1">
+      <button type="submit" formaction="/publications/{{ item.id }}/save-draft" class="secondary">Сохранить черновик</button>
+      <button type="submit" formaction="/publications/{{ item.id }}/generate" class="secondary js-llm-regen">Перегенерировать LLM</button>
+      <button type="submit" formaction="/publications/{{ item.id }}/publish">Опубликовать сейчас</button>
+      <button type="submit" formaction="/publications/{{ item.id }}/schedule" class="secondary">Запланировать</button>
+      <button
+        type="button"
+        class="danger js-reject-open"
+        data-action="/publications/{{ item.id }}/reject"
+        data-preview-id="reject-preview-{{ item.id }}"
+        data-draft-input="draft-{{ item.id }}"
+      >Отклонить</button>
+    </div>
+    <p class="muted" style="margin:0;grid-column:1/-1">Перегенерация на CPU может занять несколько минут — не закрывайте страницу.</p>
+  </form>
+  {% endif %}
+  <pre id="reject-preview-{{ item.id }}" class="reject-source-data" hidden>{{ item.draft_text or item.source_text }}</pre>
+</div>
+{% else %}
+<div class="panel muted">Очередь Будней и Важного пуста.{% if stats.queue_memes %} Заявки на мемы — во вкладке <a href="/publications/memes">Мемы</a>.{% endif %}</div>
+{% endfor %}
+
+{% if scheduled %}
+<h2 class="section-title">Расписание</h2>
+<div class="panel">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Тип</th><th>Автор</th><th>Когда</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for item in scheduled %}
+        <tr>
+          <td>#{{ item.id }}</td>
+          <td>{{ kind_labels.get(item.kind.value, item.kind.value) }}</td>
+          <td>{% if item.author %}{{ item.author.full_name }}{% else %}{{ item.author_id }}{% endif %}</td>
+          <td>{{ item.scheduled_at.strftime('%d.%m.%Y %H:%M') if item.scheduled_at else '—' }}</td>
+          <td>
+            <form method="post" action="/publications/{{ item.id }}/cancel-schedule">
+              <button type="submit" class="secondary">Вернуть в очередь</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "community_nav.html" import community_tabs %}
+{% block title %}{{ rank.label }} — Ранги — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ rank.label }}</h1>
+<p class="page-sub">ID: {{ rank.id }}</p>
+{{ community_tabs('roles', can_staff=true) }}
+<p><a href="/community/roles">← К ролям и рангам</a></p>
+
+<section class="panel" style="max-width:36rem">
+  <h2>Редактировать ранг</h2>
+  <form method="post" action="/community/ranks/{{ rank.id }}/update" class="stack">
+    <label>Название <input name="label" required maxlength="200" value="{{ rank.label }}"></label>
+    <label>Уровень <input type="number" name="level" min="0" value="{{ rank.level }}"></label>
+    <label>Цвет <input name="color" type="color" value="{{ rank.color }}"></label>
+    <label>Порядок <input type="number" name="sort_order" value="{{ rank.sort_order }}"></label>
+    <label>База благодати <input type="number" name="base_grace" min="0" value="{{ rank.base_grace }}"></label>
+    <label>Потолок благодати <input type="number" name="cap_grace" min="0" value="{{ rank.cap_grace }}"></label>
+    <label class="check-row" style="flex-direction:row;align-items:center">
+      <input type="checkbox" name="can_transfer_grace" value="1" {% if rank.can_transfer_grace %}checked{% endif %}>
+      Может переводить благодать
+    </label>
+    <div class="actions">
+      <button type="submit">Сохранить</button>
+    </div>
+  </form>
+  <form method="post" action="/community/ranks/{{ rank.id }}/delete" style="margin-top:1rem" onsubmit="return confirm('Удалить ранг «{{ rank.label }}»?');">
+    <button type="submit" class="danger">Удалить ранг</button>
+  </form>
+</section>
+{% endblock %}

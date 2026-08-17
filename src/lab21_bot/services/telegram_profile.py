@@ -23,13 +23,17 @@ async def _telegram_call(
     method: str,
     *,
     params: dict[str, Any] | None = None,
+    timeout: float = 20.0,
 ) -> dict[str, Any]:
-    response = await client.get(
-        f"{TELEGRAM_API}/bot{bot_token}/{method}",
-        params=params,
-        timeout=20.0,
-    )
-    response.raise_for_status()
+    try:
+        response = await client.get(
+            f"{TELEGRAM_API}/bot{bot_token}/{method}",
+            params=params,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise TelegramProfileError(f"Telegram недоступен: {exc}") from exc
     payload = response.json()
     if not payload.get("ok"):
         raise TelegramProfileError(str(payload.get("description", "Telegram API error")))
@@ -85,6 +89,7 @@ async def sync_user_profile(
             bot_token,
             "getChat",
             params={"chat_id": user.telegram_id},
+            timeout=5.0,
         )
         user.full_name = _compose_full_name(chat)
         username = chat.get("username")

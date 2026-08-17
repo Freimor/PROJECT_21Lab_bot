@@ -1,0 +1,7 @@
+{% macro game_tabs(section) -%}
+<nav class="subnav">
+  <a href="/gamification/quests" class="{% if section == 'quests' %}active{% endif %}">Квесты</a>
+  <a href="/gamification/seasons" class="{% if section == 'seasons' %}active{% endif %}">Сезонные ивенты</a>
+  <a href="/gamification/settings" class="{% if section == 'settings' %}active{% endif %}">Настройки</a>
+</nav>
+{%- endmacro %}

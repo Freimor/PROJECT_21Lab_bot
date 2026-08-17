@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "feedback_nav.html" import feedback_tabs %}
+{% block title %}{{ 'Баги' if feedback_section == 'bugs' else 'Предложения' }} — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Баги и предложения</h1>
+<p class="page-sub">Сообщения из топика с командами <code>/bug</code> и <code>/upgrade</code>.</p>
+{{ feedback_tabs(feedback_section, pending_bugs, pending_upgrades) }}
+
+<form method="get" class="actions" style="margin:0.75rem 0;gap:0.5rem">
+  <label>Статус
+    <select name="status" onchange="this.form.submit()">
+      <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Открытые</option>
+      <option value="accepted" {% if status_filter == 'accepted' %}selected{% endif %}>Принятые</option>
+      <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Отклонённые</option>
+      <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Все</option>
+    </select>
+  </label>
+</form>
+
+{% for item in items %}
+<div class="panel" id="feedback-{{ item.id }}">
+  <div class="actions" style="justify-content:space-between;align-items:flex-start">
+    <div>
+      <strong>#{{ item.id }}</strong>
+      · {{ kind_labels.get(item.kind.value, item.kind.value) }}
+      · <span class="badge">{{ item.status.value }}</span>
+      <div class="muted" style="margin-top:0.25rem">
+        {{ item.author_name }}{% if item.author_username %} (@{{ item.author_username }}){% endif %}
+        · {{ item.created_at.strftime('%d.%m.%Y %H:%M') if item.created_at else '' }}
+      </div>
+    </div>
+  </div>
+  {% if item.text %}
+  <pre style="white-space:pre-wrap;margin:0.75rem 0">{{ item.text }}</pre>
+  {% else %}
+  <p class="muted">Без текста</p>
+  {% endif %}
+  {% if item.media %}
+  <div class="actions" style="flex-wrap:wrap;gap:0.5rem">
+    {% for media in item.media %}
+      {% if media.type == 'photo' or media.type == 'animation' %}
+      <a href="/feedback/{{ item.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">
+        <img src="/feedback/{{ item.id }}/media/{{ loop.index0 }}" alt="" style="max-height:120px;border-radius:6px">
+      </a>
+      {% elif media.type == 'video' %}
+      <video src="/feedback/{{ item.id }}/media/{{ loop.index0 }}" controls style="max-height:160px;border-radius:6px"></video>
+      {% else %}
+      <a href="/feedback/{{ item.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">файл</a>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if item.status.value == 'pending' %}
+  <form method="post" class="actions" style="margin-top:0.75rem;gap:0.5rem;flex-wrap:wrap">
+    <input type="text" name="note" placeholder="Комментарий (опционально)" style="min-width:220px;flex:1">
+    <button type="submit" formaction="/feedback/{{ item.id }}/accept">Принять</button>
+    <button type="submit" formaction="/feedback/{{ item.id }}/reject" class="danger">Отклонить</button>
+  </form>
+  {% elif item.decision_note %}
+  <p class="muted" style="margin-top:0.75rem">Комментарий: {{ item.decision_note }}</p>
+  {% endif %}
+</div>
+{% else %}
+<div class="panel muted">Очередь пуста.</div>
+{% endfor %}
+{% endblock %}

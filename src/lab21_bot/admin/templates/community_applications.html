@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% from "community_nav.html" import community_tabs %}
+{% block title %}Заявки — Комьюнити — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Комьюнити</h1>
+<p class="page-sub">Заявки на вступление и валидация навыков.</p>
+{{ community_tabs('applications', can_staff=true, can_economy=false) }}
+
+<div class="panel">
+  <h2>На валидации навыков</h2>
+  {% for application in skill_apps %}
+  <div class="app-card">
+    <div class="user-row">
+      {% if application.user.avatar_file_id %}
+      <img class="avatar" src="/avatar/{{ application.user.telegram_id }}" alt="">
+      {% else %}
+      <div class="avatar avatar-fallback">{{ application.user.full_name[:1] }}</div>
+      {% endif %}
+      <div>
+        <strong>{{ application.user.full_name }}</strong>
+        <span class="badge">{% if application.user.is_approved %}добавление навыка{% else %}навыки{% endif %}</span>
+        <div class="muted">
+          {% if application.user.username %}@{{ application.user.username }} · {% endif %}
+          ID {{ application.user.telegram_id }} · до {{ application.expires_at.strftime('%d.%m.%Y') }}
+        </div>
+        {% if application.bio %}
+        <div style="margin-top:0.4rem"><strong>О себе:</strong> {{ application.bio }}</div>
+        {% endif %}
+        {% if application.skills_text %}
+        <div style="margin-top:0.4rem"><strong>Комментарий:</strong> {{ application.skills_text }}</div>
+        {% endif %}
+        {% if application.skill_ids %}
+        {% for sid in application.skill_ids %}
+        <div class="skill-validation-block" style="margin-top:0.55rem">
+          <div class="skill-chips">
+            <span class="badge">{{ skill_titles.get(sid, sid) }}</span>
+          </div>
+          {% if skill_validation_descriptions.get(sid) %}
+          <div class="muted" style="margin-top:0.35rem">
+            <strong>Как проверить:</strong>
+            {{ skill_validation_descriptions.get(sid) }}
+          </div>
+          {% else %}
+          <div class="muted" style="margin-top:0.35rem">Описание проверки для этого навыка не задано.</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% if application.user.removal_reason %}
+        <div class="prior-removal">
+          Ранее удалён: {{ removal_reason_labels.get(application.user.removal_reason.value, application.user.removal_reason.value) }}
+          {% if application.user.removed_at %} · {{ application.user.removed_at.strftime('%d.%m.%Y') }}{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    <form method="post" action="/community/applications/{{ application.id }}/resolve" class="stack" style="margin-top:0.75rem">
+      {% for sid in application.skill_ids or [] %}
+      <input type="hidden" name="skill_ids" value="{{ sid }}">
+      {% endfor %}
+      <label>Заметка<input name="note" placeholder="опционально, иначе причина по навыку"></label>
+      <div class="actions">
+        <button type="submit" name="approve" value="1">Принять</button>
+        <button type="submit" name="approve" value="0" class="danger">Отказать</button>
+      </div>
+    </form>
+  </div>
+  {% else %}
+  <p class="muted">Нет заявок на валидации навыков.</p>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <h2>Заявки</h2>
+  {% for application in pending_apps %}
+  <div class="app-card">
+    <div class="user-row">
+      {% if application.user.avatar_file_id %}
+      <img class="avatar" src="/avatar/{{ application.user.telegram_id }}" alt="">
+      {% else %}
+      <div class="avatar avatar-fallback">{{ application.user.full_name[:1] }}</div>
+      {% endif %}
+      <div>
+        <strong>{{ application.user.full_name }}</strong>
+        <span class="badge">{{ 'сотрудник' if application.kind.value == 'staff' else 'участник' }}</span>
+        <div class="muted">
+          {% if application.user.username %}@{{ application.user.username }} · {% endif %}
+          ID {{ application.user.telegram_id }} · до {{ application.expires_at.strftime('%d.%m.%Y') }}
+        </div>
+        {% if application.bio %}
+        <div style="margin-top:0.4rem"><strong>О себе:</strong> {{ application.bio }}</div>
+        {% endif %}
+        {% if application.skills_text %}
+        <div style="margin-top:0.4rem"><strong>Навыки (текст):</strong> {{ application.skills_text }}</div>
+        {% endif %}
+        {% if application.skill_ids %}
+        <div class="skill-chips" style="margin-top:0.4rem">
+          {% for sid in application.skill_ids %}
+          <span class="badge">{{ skill_titles.get(sid, sid) }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if application.user.removal_reason %}
+        <div class="prior-removal">
+          Ранее удалён: {{ removal_reason_labels.get(application.user.removal_reason.value, application.user.removal_reason.value) }}
+          {% if application.user.removed_at %} · {{ application.user.removed_at.strftime('%d.%m.%Y') }}{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    <form method="post" action="/community/applications/{{ application.id }}/resolve" class="stack" style="margin-top:0.75rem">
+      {% if application.kind.value == 'staff' %}
+      <label>Роль при одобрении
+        <select name="staff_role">
+          {% for role in roles %}
+          <option value="{{ role }}" {% if role == 'watcher' %}selected{% endif %}>{{ role_labels.get(role, role) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% else %}
+      <fieldset class="skills-picker" data-skills-picker>
+        <legend>Сопоставить навыки из каталога</legend>
+        <input type="search" class="skills-search" placeholder="Поиск навыка…" autocomplete="off">
+        <div class="scroll-checklist">
+          {% set selected = application.skill_ids or [] %}
+          {% for skill in skills %}
+          <label class="check" data-skill="{{ skill.title|lower }}">
+            <span>{{ skill.title }}</span>
+            <input type="checkbox" name="skill_ids" value="{{ skill.id }}" {% if skill.id in selected %}checked{% endif %}>
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      {% endif %}
+      <label>Заметка<input name="note" placeholder="опционально"></label>
+      <div class="actions">
+        <button type="submit" name="approve" value="1">Принять</button>
+        <button type="submit" name="approve" value="0" class="danger">Отказать</button>
+      </div>
+    </form>
+  </div>
+  {% else %}
+  <p class="muted">Новых заявок нет.</p>
+  {% endfor %}
+</div>
+{% endblock %}

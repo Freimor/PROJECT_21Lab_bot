@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "gamification_nav.html" import game_tabs %}
+{% block title %}Настройки геймификации — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Настройки геймификации</h1>
+<p class="page-sub">Ритуал, упоминания, благословения, flavor и сезоны.</p>
+{{ game_tabs('settings') }}
+
+<div class="panel">
+  <form method="post" action="/gamification/settings" class="form-grid">
+    <label>Благодать за ритуал (/bow)
+      <input type="number" name="ritual_grace" min="0" max="100" value="{{ settings_map.ritual_grace }}" required>
+    </label>
+    <label>Бонус благодати каждые 7 дней серии
+      <input type="number" name="ritual_streak_bonus_grace" min="0" max="500" value="{{ settings_map.ritual_streak_bonus_grace }}" required>
+    </label>
+    <label>Сколько секунд показывать ответ /bow
+      <input type="number" name="ritual_reply_ttl_seconds" min="1" max="120" value="{{ settings_map.ritual_reply_ttl_seconds }}" required>
+    </label>
+    <label>Кулдаун ответа на @тег (сек)
+      <input type="number" name="mention_cooldown_seconds" min="0" max="3600" value="{{ settings_map.mention_cooldown_seconds }}" required>
+    </label>
+    <label>Лимит благословений в сутки (staff)
+      <input type="number" name="bless_daily_limit" min="0" max="50" value="{{ settings_map.bless_daily_limit }}" required>
+    </label>
+    <label>Пауза повторного благословения одному (дни)
+      <input type="number" name="bless_pair_cooldown_days" min="0" max="90" value="{{ settings_map.bless_pair_cooldown_days }}" required>
+    </label>
+    <label>Шанс flavor-гифки/реакции (%)
+      <input type="number" name="flavor_chance_percent" min="0" max="100" value="{{ settings_map.flavor_chance_percent }}" required>
+    </label>
+    <label>Напоминание о сезоне (дней до старта)
+      <input type="number" name="season_reminder_days" min="1" max="14" value="{{ settings_map.season_reminder_days }}" required>
+    </label>
+    <div class="actions" style="align-self:end"><button type="submit">Сохранить</button></div>
+  </form>
+</div>
+{% endblock %}

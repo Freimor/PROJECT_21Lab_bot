@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% from "settings_nav.html" import settings_tabs %}
+{% block title %}Настройки LLM — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Настройки</h1>
+<p class="page-sub">Модель Ollama, температура и директивы в промпте.</p>
+{{ settings_tabs(settings_section) }}
+
+<div class="settings-layout" style="margin-top:1rem">
+  <div class="panel">
+    <p class="muted" style="margin-top:0">
+      Ollama:
+      {% if ollama_ok %}
+        <span style="color:var(--ok, #2a7)">доступна</span>
+      {% else %}
+        <span style="color:var(--danger, #c33)">недоступна</span>
+        — заявки уйдут в очередь без оформления.
+      {% endif %}
+      · {{ llm_base_url }}
+    </p>
+    <form method="post" action="/settings/llm" class="form-grid">
+      <label>Модель
+        {% if models %}
+        <select name="model" required>
+          {% for name in models %}
+          <option value="{{ name }}" {% if name == runtime.model %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+          {% if runtime.model and runtime.model not in models %}
+          <option value="{{ runtime.model }}" selected>{{ runtime.model }} (не установлена)</option>
+          {% endif %}
+        </select>
+        {% else %}
+        <input name="model" value="{{ runtime.model }}" required placeholder="qwen3:4b">
+        <span class="muted">Список моделей недоступен — введите имя вручную</span>
+        {% endif %}
+      </label>
+      <label>Температура (0–2)
+        <input type="number" name="temperature" min="0" max="2" step="0.05"
+               value="{{ runtime.temperature }}" required>
+      </label>
+      <label>Таймаут (сек)
+        <input type="number" name="timeout_seconds" min="5" max="1800" step="1"
+               value="{{ runtime.timeout_seconds|int }}" required>
+      </label>
+      <p class="muted" style="grid-column:1/-1;margin:0">
+        На CPU генерация поста может занимать 5–20+ минут. Для qwen3.5:4b без GPU
+        ставьте таймаут ≥ 600–1200 с и директиву <code>/no_think</code>.
+      </p>
+      <label style="grid-column:1/-1">Команды / директивы (добавляются в конец user-промпта)
+        <input name="command_suffix" value="{{ runtime.command_suffix }}"
+               placeholder="/no_think">
+      </label>
+      <div class="actions" style="align-self:end"><button type="submit">Сохранить</button></div>
+    </form>
+  </div>
+
+  <aside class="people-legend panel">
+    <h2>Легенда</h2>
+    <h3>Команды / директивы</h3>
+    <ul class="legend-list">
+      {% for item in command_legend %}
+      <li>
+        <div class="legend-title">
+          <code>{{ item.code }}</code>
+        </div>
+        <div class="muted">{{ item.desc }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="muted legend-note">
+      Текст из поля дописывается в конец user-промпта при генерации.
+      Несколько директив можно указать через пробел или с новой строки.
+      Актуально для Qwen3 и других thinking-моделей.
+    </p>
+    <p class="muted legend-note">
+      Шаблоны промптов — в <a href="/publications/llm/templates">Публикации → Посты с LLM → Шаблоны</a>.
+    </p>
+  </aside>
+</div>
+{% endblock %}

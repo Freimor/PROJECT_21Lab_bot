@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "publications_nav.html" import pub_tabs, llm_tabs %}
+{% from "placeholder_legend.html" import placeholder_legend %}
+{% block title %}Шаблоны LLM — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Посты с LLM</h1>
+<p class="page-sub">Промпты для оформления Будней и Важного.</p>
+{{ pub_tabs(pub_section, can_settings, can_queue, badges) }}
+{{ llm_tabs(pub_section, can_settings, can_queue) }}
+
+<div class="token-field token-field-wide">
+  <div class="panel">
+    <form method="post" action="/publications/llm/templates" class="form-grid" style="grid-template-columns:1fr">
+      <label>System
+        <textarea name="system" rows="14" required>{{ prompts.system }}</textarea>
+      </label>
+      <label>Staff post (заметка без интервью)
+        <textarea name="staff_post" rows="8" required>{{ prompts.staff_post }}</textarea>
+      </label>
+      <label>Interview post (ответы интервью)
+        <textarea name="interview_post" rows="8" required>{{ prompts.interview_post }}</textarea>
+      </label>
+      <label>Заказ (отчёт по услуге → Будни лабы)
+        <textarea name="job_post" rows="8" required>{{ prompts.job_post }}</textarea>
+      </label>
+      <div class="actions"><button type="submit">Сохранить шаблоны</button></div>
+    </form>
+  </div>
+  {{ placeholder_legend(llm_prompt_placeholders, note='Вставьте {source} туда, куда модель должна подставить исходник.') }}
+</div>
+{% endblock %}

@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% from "gamification_nav.html" import game_tabs %}
+{% from "placeholder_legend.html" import placeholder_legend %}
+{% block title %}Сезонные ивенты — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Сезонные ивенты</h1>
+<p class="page-sub">Создание слева, карта года справа. Активный сезон влияет на коллекцию мемов и фразы.</p>
+{{ game_tabs('seasons') }}
+
+<div class="seasons-layout">
+  <section class="panel">
+    <h2>Создать сезон</h2>
+    <form method="post" action="/gamification/seasons" class="stack" id="season-create-form">
+      <label>Код <input name="code" id="s-code" required placeholder="halloween" value="{{ draft.code or '' }}"></label>
+      <label>Название <input name="title" id="s-title" required value="{{ draft.title or '' }}"></label>
+      <label>Описание <textarea name="description" id="s-description" rows="3">{{ draft.description or '' }}</textarea></label>
+      <label>Начало <input type="date" name="starts_on" id="s-start" required value="{{ draft.starts_on or '' }}"></label>
+      <label>Конец <input type="date" name="ends_on" id="s-end" required value="{{ draft.ends_on or '' }}"></label>
+      <label>Коллекция мемов
+        <select name="meme_collection" id="s-meme">
+          {% for col in meme_collections %}
+          <option value="{{ col.key }}" {% if (draft.meme_collection or 'default') == col.key %}selected{% endif %}>
+            {{ col.key }}{% if col.meme_count %} · {{ col.meme_count }} мем.{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Ключ фраз
+        <select name="phrases_key" id="s-phrases">
+          <option value="" {% if not draft.phrases_key %}selected{% endif %}>Обычные фразы</option>
+          {% for item in phrase_keys %}
+          <option value="{{ item.key }}" {% if draft.phrases_key == item.key %}selected{% endif %}>
+            {{ item.key }}{% if item.phrase_count %} · {{ item.phrase_count }} фраз.{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="token-field">
+        <div class="stack">
+          <label>Сообщение о начале
+            <textarea name="start_message" id="s-start-msg" rows="4">{{ draft.start_message or season_start_default }}</textarea>
+          </label>
+          <label>Сообщение о конце
+            <textarea name="end_message" id="s-end-msg" rows="3">{{ draft.end_message or season_end_default }}</textarea>
+          </label>
+        </div>
+        {{ placeholder_legend(season_announce_placeholders, note='Посты уйдут в «Важное»: начало — в день старта, конец — на следующий день после даты «По» (около 9:05).') }}
+      </div>
+      <button type="submit">Создать сезон</button>
+    </form>
+  </section>
+
+  <section class="panel season-map-panel">
+    <div class="season-map-head">
+      <h2>Карта года</h2>
+      <nav class="season-map-years" aria-label="Год карты">
+        <a class="season-map-year-step" href="/gamification/seasons?year={{ year_map.year - 1 }}{% if request.query_params.get('copy') %}&amp;copy={{ request.query_params.get('copy') }}{% endif %}" title="Предыдущий год">←</a>
+        {% for y in year_map.years %}
+        <a class="season-map-year{% if y == year_map.year %} is-current{% endif %}" href="/gamification/seasons?year={{ y }}{% if request.query_params.get('copy') %}&amp;copy={{ request.query_params.get('copy') }}{% endif %}">{{ y }}</a>
+        {% endfor %}
+        <a class="season-map-year-step" href="/gamification/seasons?year={{ year_map.year + 1 }}{% if request.query_params.get('copy') %}&amp;copy={{ request.query_params.get('copy') }}{% endif %}" title="Следующий год">→</a>
+      </nav>
+    </div>
+
+    <div
+      class="season-map"
+      id="season-map"
+      data-year="{{ year_map.year }}"
+      data-days="{{ year_map.days }}"
+    >
+      <div class="season-map-grid">
+        <div class="season-map-corner muted">
+          {% if year_map.today_pct is not none %}
+          сегодня {{ year_map.today.strftime('%d.%m') }}
+          {% endif %}
+        </div>
+        <div class="season-map-months" aria-hidden="true">
+          {% for m in year_map.months %}
+          <span style="left: {{ m.left }}%; width: {{ m.width }}%">{{ m.label }}</span>
+          {% endfor %}
+        </div>
+
+        <div class="season-map-meta is-draft" id="season-map-draft-meta" hidden>
+          <strong id="season-map-draft-title">черновик</strong>
+          <span class="muted" id="season-map-draft-dates"></span>
+        </div>
+        <div class="season-map-track is-draft" id="season-map-draft-track" hidden>
+          {% for m in year_map.months %}
+          <span class="season-map-guide" style="left: {{ m.left }}%; width: {{ m.width }}%"></span>
+          {% endfor %}
+          {% if year_map.today_pct is not none %}
+          <span class="season-map-today" style="left: {{ year_map.today_pct }}%"></span>
+          {% endif %}
+          <span class="season-map-bar is-draft" id="season-map-draft-bar"></span>
+        </div>
+
+        {% for row in year_map.rows %}
+        <div class="season-map-meta is-{{ row.state }}">
+          <a href="/gamification/seasons/{{ row.id }}">{{ row.title }}</a>
+          <span class="muted">
+            {{ row.starts_on.strftime('%d.%m') }}–{{ row.ends_on.strftime('%d.%m.%y') }}
+            · {{ row.code }}{% if not row.is_enabled %} · выкл{% endif %}
+            · <a href="/gamification/seasons/{{ row.id }}">править</a>
+            · <a href="/gamification/seasons?copy={{ row.id }}&amp;year={{ year_map.year }}">копировать</a>
+          </span>
+        </div>
+        <div class="season-map-track">
+          {% for m in year_map.months %}
+          <span class="season-map-guide" style="left: {{ m.left }}%; width: {{ m.width }}%"></span>
+          {% endfor %}
+          {% if year_map.today_pct is not none %}
+          <span class="season-map-today" style="left: {{ year_map.today_pct }}%"></span>
+          {% endif %}
+          <a
+            class="season-map-bar is-{{ row.state }}{% if row.continues_left %} is-wrap-left{% endif %}{% if row.continues_right %} is-wrap-right{% endif %}"
+            href="/gamification/seasons/{{ row.id }}"
+            style="left: {{ row.left }}%; width: {{ row.width }}%; background: {{ row.color }}"
+            title="{{ row.title }} · {{ row.starts_on }} — {{ row.ends_on }}{% if not row.is_enabled %} · выключен{% endif %}"
+          >{{ row.title }}</a>
+        </div>
+        {% else %}
+        <p class="muted season-map-empty">В {{ year_map.year }} сезонов нет — создайте слева или переключите год.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+</div>
+<script>
+(function () {
+  const map = document.getElementById("season-map");
+  const startEl = document.getElementById("s-start");
+  const endEl = document.getElementById("s-end");
+  const titleEl = document.getElementById("s-title");
+  const meta = document.getElementById("season-map-draft-meta");
+  const track = document.getElementById("season-map-draft-track");
+  const bar = document.getElementById("season-map-draft-bar");
+  const draftTitle = document.getElementById("season-map-draft-title");
+  const draftDates = document.getElementById("season-map-draft-dates");
+  if (!map || !startEl || !endEl || !meta || !track || !bar) return;
+  const year = Number(map.dataset.year);
+  const days = Number(map.dataset.days);
+  if (!year || !days) return;
+
+  function parseIso(value) {
+    if (!value) return null;
+    const parts = value.split("-").map(Number);
+    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
+    return Date.UTC(parts[0], parts[1] - 1, parts[2]);
+  }
+
+  function fmt(ts) {
+    const d = new Date(ts);
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    return dd + "." + mm;
+  }
+
+  function syncDraft() {
+    const start = parseIso(startEl.value);
+    const end = parseIso(endEl.value);
+    const empty = document.querySelector(".season-map-empty");
+    if (start == null || end == null || end < start) {
+      meta.hidden = true;
+      track.hidden = true;
+      if (empty) empty.hidden = false;
+      return;
+    }
+    const jan1 = Date.UTC(year, 0, 1);
+    const dec31 = Date.UTC(year, 11, 31);
+    if (end < jan1 || start > dec31) {
+      meta.hidden = true;
+      track.hidden = true;
+      if (empty) empty.hidden = false;
+      return;
+    }
+    const visStart = start < jan1 ? jan1 : start;
+    const visEnd = end > dec31 ? dec31 : end;
+    const dayMs = 86400000;
+    const left = ((visStart - jan1) / dayMs) / days * 100;
+    let width = (((visEnd - visStart) / dayMs) + 1) / days * 100;
+    width = Math.max(width, 0.85);
+    bar.style.left = left + "%";
+    bar.style.width = Math.min(width, 100 - left) + "%";
+    bar.classList.toggle("is-wrap-left", start < jan1);
+    bar.classList.toggle("is-wrap-right", end > dec31);
+    draftTitle.textContent = (titleEl && titleEl.value.trim()) || "черновик";
+    draftDates.textContent = fmt(start) + "–" + fmt(end);
+    meta.hidden = false;
+    track.hidden = false;
+    if (empty) empty.hidden = true;
+  }
+
+  ["change", "input"].forEach((evt) => {
+    startEl.addEventListener(evt, syncDraft);
+    endEl.addEventListener(evt, syncDraft);
+    if (titleEl) titleEl.addEventListener(evt, syncDraft);
+  });
+  syncDraft();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% from "gamification_nav.html" import game_tabs %}
+{% block title %}Квест #{{ quest.number }} — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Квест #{{ quest.number }}</h1>
+<p class="page-sub">Статус: {{ quest.status.value }}</p>
+{{ game_tabs('quests') }}
+<p><a href="/gamification/quests">← К журналу</a>
+  · <a href="/gamification/quests?copy={{ quest.id }}">Копировать в создание</a></p>
+
+{% if quest.status.value == 'open' %}
+<div class="split-layout">
+  <section class="panel">
+    <h2>Редактировать</h2>
+    <form method="post" action="/gamification/quests/{{ quest.id }}/update" class="stack" enctype="multipart/form-data">
+      <label>Название <input name="title" required maxlength="200" value="{{ quest.title }}"></label>
+      <label>Описание <textarea name="description" rows="4" required>{{ quest.description }}</textarea></label>
+      <div>
+        <label>Изображение <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+        {% if quest_image %}
+        <div style="margin-top:0.5rem">
+          <img class="product-thumb" src="/uploads/{{ quest_image }}" alt="">
+          <label class="check-row" style="flex-direction:row;align-items:center;margin-top:0.35rem">
+            <input type="checkbox" name="clear_image" value="1"> Убрать изображение
+          </label>
+        </div>
+        {% endif %}
+      </div>
+      <fieldset class="quest-schedule" data-quest-schedule>
+        <legend>Срок</legend>
+        {% set mode = 'range' if quest.quest_date or quest.quest_ends_on else 'indefinite' %}
+        <label class="check-row"><input type="radio" name="schedule_mode" value="indefinite" {% if mode != 'range' %}checked{% endif %}> Бессрочный</label>
+        <label class="check-row"><input type="radio" name="schedule_mode" value="range" {% if mode == 'range' %}checked{% endif %}> Диапазон дат</label>
+        <div class="quest-schedule-range" {% if mode != 'range' %}hidden{% endif %}>
+          <label>С <input type="date" name="quest_date" value="{{ quest.quest_date.isoformat() if quest.quest_date else '' }}"></label>
+          <label>По <input type="date" name="quest_ends_on" value="{{ (quest.quest_ends_on or quest.quest_date).isoformat() if (quest.quest_ends_on or quest.quest_date) else '' }}"></label>
+          <p class="muted">Один день — укажи одинаковые даты в «С» и «По».</p>
+        </div>
+      </fieldset>
+      <label>Максимум участников <input type="number" name="required_participants" min="1" value="{{ quest.required_participants }}"></label>
+      <label>Благодать (общая) <input type="number" name="grace_reward" min="0" value="{{ quest.grace_reward }}"></label>
+      <label>Респект (общий) <input type="number" name="respect_reward" min="0" value="{{ quest.respect_reward }}"></label>
+      <fieldset class="skills-picker" data-skills-picker>
+        <legend>Навыки</legend>
+        <input type="search" class="skills-search" placeholder="Поиск навыка…" autocomplete="off">
+        <div class="scroll-checklist">
+          {% for skill in skills %}
+          <label class="check" data-skill="{{ skill.title|lower }}">
+            <span>{{ skill.title }}</span>
+            <input type="checkbox" name="skill_ids" value="{{ skill.id }}" {% if skill.id in (quest.skill_ids or []) %}checked{% endif %}>
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <button type="submit">Сохранить и обновить пост</button>
+    </form>
+    <form method="post" action="/gamification/quests/{{ quest.id }}/refresh-post" style="margin-top:0.75rem">
+      <button type="submit" class="secondary">Обновить пост в Telegram</button>
+    </form>
+    <p class="muted">Если карточка в «Важное» не меняется — нажми «Обновить пост». Старый пост удалится и отправится заново с кнопкой «Участвовать».</p>
+  </section>
+
+  <div class="stack" style="gap:1rem">
+    <section class="panel">
+      <h2>Участники</h2>
+      <ul>
+        {% for m in members %}
+        <li>
+          {{ m.full_name }}
+          <form method="post" action="/gamification/quests/{{ quest.id }}/remove-member" style="display:inline">
+            <input type="hidden" name="member_id" value="{{ m.telegram_id }}">
+            <button type="submit" class="secondary">Отписать</button>
+          </form>
+        </li>
+        {% else %}
+        <li class="muted">Пока никого</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Завершить квест</h2>
+      <p>Распредели награду в процентах (сумма 100%).</p>
+      <form method="post" action="/gamification/quests/{{ quest.id }}/complete" class="stack">
+        {% set n = members|length %}
+        {% for m in members %}
+        <label>{{ m.full_name }}
+          <input type="number" name="share_{{ m.telegram_id }}" min="0" max="100" step="0.1"
+                 value="{{ (100 / n)|round(1) if n else 0 }}">
+        </label>
+        {% endfor %}
+        {% if not members %}
+        <p class="muted">Участников нет — завершение без наград.</p>
+        {% endif %}
+        <button type="submit" class="danger">Завершить квест</button>
+      </form>
+    </section>
+  </div>
+</div>
+{% else %}
+<section class="panel">
+  <h2>{{ quest.title }}</h2>
+  <pre class="box">{{ quest.description }}</pre>
+  <p class="muted">Квест закрыт. Участников: {{ quest.members|length }}.</p>
+  <ul>
+    {% for row in quest.members %}
+    <li>
+      {% if row.user %}{{ row.user.full_name }}{% else %}id {{ row.user_id }}{% endif %}
+      {% if row.reward_grace is not none %} — {{ row.reward_grace }} бл. / {{ row.reward_respect }} респ.{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+<script>
+(function () {
+  document.querySelectorAll("[data-quest-schedule]").forEach((root) => {
+    const range = root.querySelector(".quest-schedule-range");
+    const start = root.querySelector('input[name="quest_date"]');
+    const end = root.querySelector('input[name="quest_ends_on"]');
+    function sync() {
+      const mode = root.querySelector('input[name="schedule_mode"]:checked');
+      const isRange = mode && mode.value === "range";
+      if (range) range.hidden = !isRange;
+      if (start) start.required = !!isRange;
+      if (end) end.required = !!isRange;
+    }
+    root.querySelectorAll('input[name="schedule_mode"]').forEach((el) => {
+      el.addEventListener("change", sync);
+    });
+    sync();
+  });
+})();
+</script>
+{% endblock %}

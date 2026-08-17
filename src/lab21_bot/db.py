@@ -52,6 +52,13 @@ async def bootstrap_database(
                 )
             )
         else:
-            if user.staff_role is not StaffRole.LORD:
+            if user.staff_role != StaffRole.LORD:
                 user.staff_role = StaffRole.LORD
             user.is_approved = True
+
+    from lab21_bot.services.skill_catalog import ensure_skills_seeded
+    from lab21_bot.services.ranks_catalog import ensure_ranks_seeded
+
+    async with factory.begin() as session:
+        await ensure_skills_seeded(session)
+        await ensure_ranks_seeded(session)

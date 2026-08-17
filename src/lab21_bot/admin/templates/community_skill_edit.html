@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "community_nav.html" import community_tabs %}
+{% block title %}{{ skill.title }} — Навыки — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ skill.title }}</h1>
+<p class="page-sub">ID: {{ skill.id }}</p>
+{{ community_tabs('skills', can_staff=true) }}
+<p><a href="/community/skills">← К каталогу</a></p>
+
+<section class="panel" style="max-width:36rem">
+  <h2>Редактировать</h2>
+  <form method="post" action="/community/skills/{{ skill.id }}/update" class="stack">
+    <label>Название <input name="title" required maxlength="200" value="{{ skill.title }}"></label>
+    <label>Описание <textarea name="description" rows="3">{{ skill.description }}</textarea></label>
+    <label>Ранг навыка <input type="number" name="level" min="1" value="{{ skill.level }}"></label>
+    <label>Благодать <input type="number" name="grace_price" min="0" value="{{ skill.grace_price }}"></label>
+    <label>Респект <input type="number" name="respect_reward" min="0" value="{{ skill.respect_reward }}"></label>
+    <label class="check-row" style="flex-direction:row;align-items:center">
+      <input type="checkbox" name="requires_validation" value="1" {% if skill.requires_validation %}checked{% endif %}>
+      Требует валидации
+    </label>
+    <label>Как валидировать <textarea name="validation_description" rows="4">{{ skill.validation_description }}</textarea></label>
+    <div class="actions">
+      <button type="submit">Сохранить</button>
+    </div>
+  </form>
+  <form method="post" action="/community/skills/{{ skill.id }}/delete" style="margin-top:1rem" onsubmit="return confirm('Удалить навык «{{ skill.title }}»?');">
+    <button type="submit" class="danger">Удалить навык</button>
+  </form>
+</section>
+{% endblock %}

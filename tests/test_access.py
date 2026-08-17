@@ -57,3 +57,13 @@ async def test_only_staff_managers_change_roles_and_lord_cannot_demote_self(
         await set_staff_role(session, watcher, target, None)
     with pytest.raises(AccessDenied):
         await set_staff_role(session, lord, lord, None)
+
+
+async def test_only_one_lord_allowed(session: AsyncSession) -> None:
+    lord = User(telegram_id=1, full_name="Лорд", staff_role=StaffRole.LORD)
+    candidate = User(telegram_id=2, full_name="Кандидат", staff_role=StaffRole.MAGISTER)
+    session.add_all([lord, candidate])
+    await session.flush()
+
+    with pytest.raises(AccessDenied, match="только один"):
+        await set_staff_role(session, lord, candidate, StaffRole.LORD)

@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lab21_bot.models import (
+    ContentItem,
     ContentKind,
     ContentStatus,
     StaffRole,
@@ -11,15 +12,36 @@ from lab21_bot.models import (
 from lab21_bot.services.content import (
     choose_interviewee,
     content_is_silent,
+    count_user_publications,
     moderate_content,
     record_channel_post,
     submit_community_content,
 )
 
 
-async def test_community_content_is_attributed_and_moderated(
-    session: AsyncSession,
-) -> None:
+async def test_submit_story_keeps_photos_for_moderation(session: AsyncSession) -> None:
+    from lab21_bot.services.content import submit_for_moderation
+
+    author = User(telegram_id=5, full_name="Автор", is_approved=True)
+    session.add(author)
+    await session.flush()
+    item = await submit_for_moderation(
+        session,
+        author,
+        ContentKind.STORY,
+        "Q: Что делал?\nA: Плата\n",
+        "Q: Что делал?\nA: Плата\n",
+        media=[
+            {"type": "photo", "file_id": "photo-1"},
+            {"type": "photo", "file_id": "photo-2"},
+        ],
+        llm_processed=False,
+    )
+    assert item.status is ContentStatus.MODERATION
+    assert item.llm_processed is False
+    assert len(item.media) == 2
+    assert item.media[0]["file_id"] == "photo-1"
+
     author = User(telegram_id=1, full_name="Инженер", username="maker")
     watcher = User(telegram_id=2, full_name="Смотрящий", staff_role=StaffRole.WATCHER)
     session.add_all([author, watcher])
@@ -33,7 +55,7 @@ async def test_community_content_is_attributed_and_moderated(
         [{"type": "photo", "file_id": "telegram-file"}],
     )
     assert item.status is ContentStatus.MODERATION
-    assert "Инженер (@maker)" in (item.draft_text or "")
+    assert item.source_text == "Собрал датчик, и он даже заработал."
     assert item.media[0]["file_id"] == "telegram-file"
 
     await moderate_content(
@@ -71,3 +93,44 @@ async def test_channel_silence_and_interview_rotation(session: AsyncSession) -> 
     assert selected_first is not None
     assert selected_second is not None
     assert selected_first.telegram_id != selected_second.telegram_id
+
+
+async def test_count_user_publications_only_published(session: AsyncSession) -> None:
+    author = User(telegram_id=50, full_name="Author", is_approved=True)
+    other = User(telegram_id=51, full_name="Other", is_approved=True)
+    session.add_all([author, other])
+    await session.flush()
+    session.add_all(
+        [
+            ContentItem(
+                author_id=author.telegram_id,
+                kind=ContentKind.STORY,
+                status=ContentStatus.PUBLISHED,
+                source_text="a",
+                draft_text="a",
+            ),
+            ContentItem(
+                author_id=author.telegram_id,
+                kind=ContentKind.MEME,
+                status=ContentStatus.PUBLISHED,
+                source_text="b",
+                draft_text="b",
+            ),
+            ContentItem(
+                author_id=author.telegram_id,
+                kind=ContentKind.STORY,
+                status=ContentStatus.MODERATION,
+                source_text="c",
+                draft_text="c",
+            ),
+            ContentItem(
+                author_id=other.telegram_id,
+                kind=ContentKind.STORY,
+                status=ContentStatus.PUBLISHED,
+                source_text="d",
+                draft_text="d",
+            ),
+        ]
+    )
+    await session.flush()
+    assert await count_user_publications(session, author.telegram_id) == 2

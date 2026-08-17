@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "settings_nav.html" import settings_tabs %}
+{% block title %}Уведомления — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Настройки</h1>
+<p class="page-sub">Куда слать оповещения о событиях админки.</p>
+{{ settings_tabs(settings_section) }}
+
+<div class="panel" style="margin-top:1rem">
+  <p class="muted" style="margin-top:0">
+    Чат сотрудников — Telegram (<code>STAFF_CHAT_ID</code>).
+    Браузер — Web Notifications, пока открыта вкладка админки (нужно разрешить в браузере).
+  </p>
+  <div class="actions" style="margin-bottom:1rem">
+    <button type="button" class="secondary" id="js-notify-permission">Разрешить уведомления браузера</button>
+    <span class="muted" id="js-notify-permission-status"></span>
+  </div>
+
+  <form method="post" action="/settings/notifications" class="form-grid">
+    <table class="data" style="grid-column:1/-1;width:100%">
+      <thead>
+        <tr>
+          <th>Событие</th>
+          <th>Чат сотрудников</th>
+          <th>Браузер</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for event in event_types %}
+        <tr>
+          <td>{{ event_labels[event] }}</td>
+          <td>
+            <label class="check">
+              <input type="checkbox" name="staff_chat_{{ event }}"
+                     {% if prefs.staff_chat[event] %}checked{% endif %}>
+            </label>
+          </td>
+          <td>
+            <label class="check">
+              <input type="checkbox" name="browser_{{ event }}"
+                     {% if prefs.browser[event] %}checked{% endif %}>
+            </label>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="actions" style="grid-column:1/-1">
+      <button type="submit">Сохранить</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(function () {
+  const btn = document.getElementById("js-notify-permission");
+  const status = document.getElementById("js-notify-permission-status");
+  if (!btn || !status) return;
+  const sync = () => {
+    if (!("Notification" in window)) {
+      status.textContent = "Браузер не поддерживает уведомления";
+      btn.disabled = true;
+      return;
+    }
+    const p = Notification.permission;
+    status.textContent = p === "granted" ? "Разрешено" : p === "denied" ? "Запрещено в браузере" : "Ещё не запрошено";
+  };
+  sync();
+  btn.addEventListener("click", async () => {
+    if (!("Notification" in window)) return;
+    await Notification.requestPermission();
+    sync();
+  });
+})();
+</script>
+{% endblock %}

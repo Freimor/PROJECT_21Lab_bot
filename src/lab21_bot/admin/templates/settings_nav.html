@@ -1,0 +1,6 @@
+{% macro settings_tabs(section) -%}
+<nav class="subnav">
+  <a href="/settings/notifications" class="{% if section == 'notifications' %}active{% endif %}">Уведомления</a>
+  <a href="/settings/llm" class="{% if section == 'llm' %}active{% endif %}">Настройки LLM</a>
+</nav>
+{%- endmacro %}

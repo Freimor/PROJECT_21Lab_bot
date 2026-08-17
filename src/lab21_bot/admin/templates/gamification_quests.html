@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "gamification_nav.html" import game_tabs %}
+{% block title %}Квесты — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Квесты</h1>
+<p class="page-sub">Задания для сообщества: создание слева, журнал справа.</p>
+{{ game_tabs('quests') }}
+
+<div class="split-layout">
+  <section class="panel">
+    <h2>Создать квест</h2>
+    <form method="post" action="/gamification/quests" class="stack" id="quest-create-form" enctype="multipart/form-data">
+      <label>Название <input name="title" id="q-title" required maxlength="200" value="{{ draft.title or '' }}"></label>
+      <label>Описание <textarea name="description" id="q-description" rows="4" required>{{ draft.description or '' }}</textarea></label>
+      <label>Изображение <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+      <fieldset class="quest-schedule" data-quest-schedule>
+        <legend>Срок</legend>
+        {% set mode = draft.schedule_mode or 'indefinite' %}
+        <label class="check-row"><input type="radio" name="schedule_mode" value="indefinite" {% if mode != 'range' %}checked{% endif %}> Бессрочный</label>
+        <label class="check-row"><input type="radio" name="schedule_mode" value="range" {% if mode == 'range' %}checked{% endif %}> Диапазон дат</label>
+        <div class="quest-schedule-range" {% if mode != 'range' %}hidden{% endif %}>
+          <label>С <input type="date" name="quest_date" id="q-date" value="{{ draft.quest_date or '' }}"></label>
+          <label>По <input type="date" name="quest_ends_on" id="q-ends" value="{{ draft.quest_ends_on or draft.quest_date or '' }}"></label>
+          <p class="muted">Один день — укажи одинаковые даты в «С» и «По».</p>
+        </div>
+      </fieldset>
+      <label>Максимум участников <input type="number" name="required_participants" id="q-need" min="1" value="{{ draft.required_participants or 1 }}"></label>
+      <label>Благодать (общая) <input type="number" name="grace_reward" id="q-grace" min="0" value="{{ draft.grace_reward if draft.grace_reward is not none else 20 }}"></label>
+      <label>Респект (общий) <input type="number" name="respect_reward" id="q-respect" min="0" value="{{ draft.respect_reward if draft.respect_reward is not none else 5 }}"></label>
+      <fieldset class="skills-picker" data-skills-picker>
+        <legend>Навыки</legend>
+        <input type="search" class="skills-search" placeholder="Поиск навыка…" autocomplete="off">
+        <div class="scroll-checklist">
+          {% set selected = draft.skill_ids or [] %}
+          {% for skill in skills %}
+          <label class="check" data-skill="{{ skill.title|lower }}">
+            <span>{{ skill.title }}</span>
+            <input type="checkbox" name="skill_ids" value="{{ skill.id }}" {% if skill.id in selected %}checked{% endif %}>
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <button type="submit">Создать и запостить в «Важное»</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Журнал квестов</h2>
+    <table class="table">
+      <thead><tr><th>#</th><th>Название</th><th>Статус</th><th>Участники</th><th></th></tr></thead>
+      <tbody>
+        {% for q in quests %}
+        <tr>
+          <td>{{ q.number }}</td>
+          <td>{{ q.title }}</td>
+          <td>{{ q.status.value }}</td>
+          <td>{{ q.members|length }}/{{ q.required_participants }}</td>
+          <td class="actions" style="gap:0.35rem">
+            <a class="secondary" href="/gamification/quests/{{ q.id }}">Редактировать</a>
+            <a class="secondary" href="/gamification/quests?copy={{ q.id }}">Копировать</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Квестов пока нет</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+<script>
+(function () {
+  document.querySelectorAll("[data-quest-schedule]").forEach((root) => {
+    const range = root.querySelector(".quest-schedule-range");
+    const start = root.querySelector('input[name="quest_date"]');
+    const end = root.querySelector('input[name="quest_ends_on"]');
+    function sync() {
+      const mode = root.querySelector('input[name="schedule_mode"]:checked');
+      const isRange = mode && mode.value === "range";
+      if (range) range.hidden = !isRange;
+      if (start) start.required = !!isRange;
+      if (end) end.required = !!isRange;
+    }
+    root.querySelectorAll('input[name="schedule_mode"]').forEach((el) => {
+      el.addEventListener("change", sync);
+    });
+    sync();
+  });
+})();
+</script>
+{% endblock %}

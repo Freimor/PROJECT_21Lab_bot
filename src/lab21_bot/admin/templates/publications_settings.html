@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "publications_nav.html" import pub_tabs %}
+{% block title %}Настройки публикаций — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Настройки публикаций</h1>
+<p class="page-sub">Политика тишины, интервью и автопостинг во флудилку.</p>
+{{ pub_tabs(pub_section, can_settings, can_queue, badges) }}
+
+<div class="panel">
+  <form method="post" action="/publications/settings" class="form-grid">
+    <label>Дней тишины в Буднях до напоминания сотрудникам
+      <input type="number" name="content_silence_days" min="1" max="90"
+             value="{{ pub_settings.content_silence_days }}" required>
+    </label>
+    <label>Час напоминания ({{ reminder_window_start }}–{{ reminder_window_end - 1 }})
+      <input type="number" name="reminder_hour" min="0" max="23"
+             value="{{ pub_settings.reminder_hour }}" required>
+    </label>
+    <label>Интервал мемов во флудилке (часы)
+      <input type="number" name="meme_interval_hours" min="1" max="168"
+             value="{{ pub_settings.meme_interval_hours }}" required>
+    </label>
+    <label class="check-row">
+      <input type="checkbox" name="interview_enabled" value="1"
+             {% if pub_settings.interview_enabled %}checked{% endif %}>
+      Интервью автора перед оформлением поста
+    </label>
+    <label class="check-row">
+      <input type="checkbox" name="memes_enabled" value="1"
+             {% if pub_settings.memes_enabled %}checked{% endif %}>
+      Приём мемов и автопостинг во флудилку
+    </label>
+    <label class="check-row">
+      <input type="checkbox" name="teasers_enabled" value="1"
+             {% if pub_settings.teasers_enabled %}checked{% endif %}>
+      Тизеры новых Будней во флудилке
+    </label>
+    <div class="actions" style="align-self:end"><button type="submit">Сохранить</button></div>
+  </form>
+</div>
+{% endblock %}

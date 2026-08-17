@@ -37,7 +37,7 @@ async def login_page(
     telegram_login_available = (
         bool(bot_username) and "localhost" not in host and "127.0.0.1" not in host
     )
-    return render(
+    return await render(
         request,
         "login.html",
         error=error,
@@ -95,7 +95,7 @@ async def password_login(
             settings.telegram_bot_token.get_secret_value(),
         )
     except AuthError as exc:
-        return render(
+        return await render(
             request,
             "login.html",
             error=str(exc),

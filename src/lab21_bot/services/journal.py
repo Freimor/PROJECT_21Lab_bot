@@ -7,32 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from lab21_bot.data import phrases_data, skill_title
 from lab21_bot.models import AdminAction, LedgerEntry, LedgerType, User
 
+_PHRASES = phrases_data()
 LEDGER_LABELS = {
-    LedgerType.GRANT: "Начисление благодати",
-    LedgerType.WITHDRAW: "Списание благодати",
-    LedgerType.TRANSFER_OUT: "Перевод благодати (исходящий)",
-    LedgerType.TRANSFER_IN: "Перевод благодати (входящий)",
-    LedgerType.PURCHASE_RESERVE: "Резерв по заказу",
-    LedgerType.PURCHASE_REFUND: "Возврат по заказу",
-    LedgerType.ADJUSTMENT: "Корректировка",
-    LedgerType.RESPECT_GRANT: "Начисление респекта",
-    LedgerType.RESPECT_WITHDRAW: "Списание респекта",
+    LedgerType(key): str(label) for key, label in _PHRASES["ledger"].items()
 }
-
-ACTION_LABELS = {
-    "set_staff_role": "Смена роли",
-    "approve_join": "Заявка одобрена",
-    "reject_join": "Заявка отклонена",
-    "remove_member": "Удаление участника",
-    "set_setting": "Изменение настройки",
-    "request_restart": "Запрос перезагрузки",
-    "create_product": "Товар создан",
-    "update_product": "Товар изменён",
-    "fulfill_order": "Заказ выдан",
-    "cancel_order": "Заказ отменён",
-}
+ACTION_LABELS = {key: str(label) for key, label in _PHRASES["admin_actions"].items()}
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,20 +34,60 @@ def _name(user: User | None, fallback: str | int | None) -> str:
     return str(fallback)
 
 
-async def recent_journal(session: AsyncSession, *, limit: int = 40) -> list[JournalEvent]:
-    actions = list(
-        await session.scalars(
-            select(AdminAction).order_by(AdminAction.created_at.desc()).limit(limit)
+def _format_action_details(action: str, details: dict) -> list[str]:
+    bits: list[str] = []
+    kind_label = details.get("kind_label")
+    if kind_label:
+        bits.append(str(kind_label))
+    elif details.get("kind"):
+        bits.append(str(details["kind"]))
+    skills = details.get("skills")
+    if isinstance(skills, list) and skills:
+        titles = ", ".join(skill_title(str(skill_id)) for skill_id in skills)
+        bits.append(f"навыки: {titles}")
+    if details.get("item_id") is not None:
+        bits.append(f"пост #{details['item_id']}")
+    if details.get("template_id") is not None:
+        bits.append(f"шаблон #{details['template_id']}")
+    if details.get("application_id") is not None and action.endswith("join"):
+        bits.append(f"заявка #{details['application_id']}")
+    if details.get("application_id") is not None and "skill_validation" in action:
+        bits.append(f"заявка #{details['application_id']}")
+    if details.get("scheduled") is True:
+        bits.append("по расписанию")
+    note = details.get("note")
+    if note:
+        bits.append(str(note))
+    if not bits and details:
+        bits.append(
+            " · ".join(f"{key}={value}" for key, value in details.items() if value is not None)
         )
+    return bits
+
+
+async def recent_journal(
+    session: AsyncSession,
+    *,
+    limit: int = 40,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> list[JournalEvent]:
+    action_query = select(AdminAction).order_by(AdminAction.created_at.desc()).limit(limit * 2)
+    ledger_query = (
+        select(LedgerEntry)
+        .options(selectinload(LedgerEntry.account_user))
+        .order_by(LedgerEntry.created_at.desc())
+        .limit(limit * 2)
     )
-    ledger = list(
-        await session.scalars(
-            select(LedgerEntry)
-            .options(selectinload(LedgerEntry.account_user))
-            .order_by(LedgerEntry.created_at.desc())
-            .limit(limit)
-        )
-    )
+    if since is not None:
+        action_query = action_query.where(AdminAction.created_at >= since)
+        ledger_query = ledger_query.where(LedgerEntry.created_at >= since)
+    if until is not None:
+        action_query = action_query.where(AdminAction.created_at <= until)
+        ledger_query = ledger_query.where(LedgerEntry.created_at <= until)
+
+    actions = list(await session.scalars(action_query))
+    ledger = list(await session.scalars(ledger_query))
     user_ids = {item.actor_id for item in actions} | {
         item.target_id for item in actions if item.target_id is not None
     }
@@ -86,8 +108,9 @@ async def recent_journal(session: AsyncSession, *, limit: int = 40) -> list[Jour
         bits = [f"кто: {actor}"]
         if target:
             bits.append(f"кого: {target}")
-        if action.details:
-            bits.append(str(action.details))
+        detail_bits = _format_action_details(action.action, action.details or {})
+        if detail_bits:
+            bits.extend(detail_bits)
         events.append(
             JournalEvent(created_at=action.created_at, title=title, detail=" · ".join(bits))
         )

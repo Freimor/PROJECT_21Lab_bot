@@ -1,0 +1,114 @@
+{
+  "skills": [
+    {
+      "id": "cad_3d_engineer",
+      "title": "3D инженер",
+      "description": "Проектирование деталей и сборок в CAD (SolidWorks, Fusion, KOMPAS и т.п.).",
+      "requires_validation": true,
+      "validation_description": "Попросить показать готовую модель/сборку в CAD и кратко объяснить дерево построений или сопряжения. Достаточно уверенной навигации по файлу и понимания допусков.",
+      "level": 1,
+      "grace_price": 100,
+      "respect_reward": 10
+    },
+    {
+      "id": "electronics",
+      "title": "Электронщик",
+      "description": "Схемотехника, сборка и отладка электронных модулей.",
+      "requires_validation": true,
+      "validation_description": "Дать простую схему (например, стабилизатор/драйвер) и попросить объяснить назначение узлов, либо разобрать готовый модуль: где питание, земля, сигналы, типичные ошибки монтажа.",
+      "level": 1,
+      "grace_price": 100,
+      "respect_reward": 10
+    },
+    {
+      "id": "cad_3d_artist",
+      "title": "3D художник",
+      "description": "Моделирование, рендер и визуализация для презентаций и контента.",
+      "requires_validation": false,
+      "validation_description": "",
+      "level": 1,
+      "grace_price": 60,
+      "respect_reward": 6
+    },
+    {
+      "id": "solder_novice",
+      "title": "Новичок пайки",
+      "description": "Базовая пайка выводных и простых SMD компонентов под присмотром.",
+      "requires_validation": false,
+      "validation_description": "",
+      "level": 1,
+      "grace_price": 40,
+      "respect_reward": 4
+    },
+    {
+      "id": "solder_master",
+      "title": "Мастер пайки",
+      "description": "Уверенная пайка мелкого SMD, ремонт плат, работа со станцией и феном.",
+      "requires_validation": true,
+      "validation_description": "Практический тест: пайка мелкого SMD или перепайка разъёма под контролем. Оценить качество стыков, флюс, температуру и аккуратность работы со станцией/феном.",
+      "level": 1,
+      "grace_price": 80,
+      "respect_reward": 8
+    },
+    {
+      "id": "pcb_design",
+      "title": "Проектировщик печатных плат",
+      "description": "Разработка схем и разводка PCB (KiCad, Altium и аналоги).",
+      "requires_validation": true,
+      "validation_description": "Показать проект в KiCad/Altium: схема + разводка. Спросить про стек слоёв, земля, дифференциальные пары/трассировку питания, DRC. Достаточно одного завершённого простого проекта.",
+      "level": 1,
+      "grace_price": 120,
+      "respect_reward": 12
+    },
+    {
+      "id": "firmware",
+      "title": "Прошивки / embedded",
+      "description": "Микроконтроллеры, периферия, отладка прошивок.",
+      "requires_validation": true,
+      "validation_description": "Показать прошивку (или репозиторий) и объяснить init периферии, прерывания/таймеры, отладку. Можно короткий live: мигание + UART или датчик на стенде.",
+      "level": 1,
+      "grace_price": 100,
+      "respect_reward": 10
+    },
+    {
+      "id": "mechanics",
+      "title": "Механик-сборщик",
+      "description": "Сборка механизмов, крепёж, подгонка деталей, мелкий ремонт.",
+      "requires_validation": false,
+      "validation_description": "",
+      "level": 1,
+      "grace_price": 50,
+      "respect_reward": 5
+    },
+    {
+      "id": "print_3d",
+      "title": "Оператор 3D-печати",
+      "description": "Подготовка моделей к печати, слайсинг, печать и пост-обработка.",
+      "requires_validation": false,
+      "validation_description": "",
+      "level": 1,
+      "grace_price": 40,
+      "respect_reward": 4
+    },
+    {
+      "id": "laser_cnc",
+      "title": "Лазер / ЧПУ",
+      "description": "Подготовка заданий и работа на лазерном станке или фрезере.",
+      "requires_validation": true,
+      "validation_description": "Попросить подготовить/показать задание (DXF/G-code) и рассказать про фокус, скорость/мощность или подачи, крепление заготовки и технику безопасности на станке лабы.",
+      "level": 1,
+      "grace_price": 70,
+      "respect_reward": 7
+    },
+    {
+      "id": "docs_pm",
+      "title": "Документация / координация",
+      "description": "Оформление ТЗ, инструкции, координация задач между участниками.",
+      "requires_validation": true,
+      "validation_description": "Показать оформленный документ/ТЗ/инструкцию и кратко объяснить структуру, статус согласования и как ведётся учёт задач.",
+      "level": 1,
+      "grace_price": 30,
+      "respect_reward": 3
+    }
+  ]
+}

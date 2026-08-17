@@ -69,3 +69,7 @@ RequireManageStore = Annotated[User, Depends(require_perm(Permission.MANAGE_STOR
 RequireModerateOrders = Annotated[User, Depends(require_perm(Permission.MODERATE_ORDERS))]
 RequireModerateContent = Annotated[User, Depends(require_perm(Permission.MODERATE_CONTENT))]
 RequireManageEconomy = Annotated[User, Depends(require_perm(Permission.MANAGE_ECONOMY))]
+RequireManageSettings = Annotated[User, Depends(require_perm(Permission.MANAGE_SETTINGS))]
+RequireCreateStaffContent = Annotated[
+    User, Depends(require_perm(Permission.CREATE_STAFF_CONTENT))
+]

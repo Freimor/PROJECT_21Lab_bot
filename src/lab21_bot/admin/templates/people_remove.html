@@ -19,15 +19,15 @@
       </div>
       <div class="muted">
         {% if target.staff_role %}
-        Роль: {{ role_labels.get(target.staff_role.value, target.staff_role.value) }}
+        Роль: {{ role_labels.get(target.staff_role|catalog_key, target.staff_role|catalog_key) }}
         {% else %}
-        Ранг: {{ rank_labels.get(target.rank.value, target.rank.value) }}
+        Ранг: {{ rank_labels.get(target.rank|catalog_key, target.rank|catalog_key) }}
         {% endif %}
       </div>
     </div>
   </div>
 
-  <form method="post" action="/people/{{ target.telegram_id }}/remove">
+  <form method="post" action="/community/{{ target.telegram_id }}/remove">
     <label>Причина удаления
       <select name="reason" required>
         {% for item in removal_reasons %}
@@ -36,11 +36,11 @@
       </select>
     </label>
     <p class="muted" style="margin:0.75rem 0">
-      Участник потеряет доступ. При новой заявке причина будет показана в списке заявок.
+      Участник потеряет доступ. При новой заявке причина будет указана в списке заявок.
     </p>
     <div class="actions">
       <button type="submit" class="danger">Подтвердить удаление</button>
-      <a class="btn secondary" href="/people">Отмена</a>
+      <a class="btn secondary" href="/community/members">Отмена</a>
     </div>
   </form>
 </div>

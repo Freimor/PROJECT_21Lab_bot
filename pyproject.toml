@@ -41,7 +41,12 @@ lab21-admin = "lab21_bot.admin.app:run"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lab21_bot = ["admin/templates/*.html", "admin/static/*"]
+lab21_bot = [
+    "admin/templates/*.html",
+    "admin/static/*",
+    "data/*.json",
+    "data/faq/*.md",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

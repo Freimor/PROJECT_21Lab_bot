@@ -2,31 +2,92 @@
 {% block title %}Магазин — Lab21 Admin{% endblock %}
 {% block content %}
 <h1 class="page-title">Магазин</h1>
-<p class="page-sub">Каталог товаров и очередь заказов.</p>
+<p class="page-sub">Каталог товаров и услуг, заказы участников и выдача с витрины.</p>
 
 {% if can_store %}
 <div class="panel">
   <h2>Новый товар</h2>
-  <form method="post" action="/shop/products/create" enctype="multipart/form-data" class="form-grid">
+  <form method="post" action="/shop/products/create" enctype="multipart/form-data" class="form-grid" id="product-create-form">
     <label>Артикул<input name="article" required placeholder="LAB-001"></label>
     <label>Название<input name="name" required></label>
-    <label>Цена (благодать)<input type="number" name="price" min="0" required></label>
+    <label>Цена (благодать)<input type="number" name="price" id="product-price" min="0" required></label>
     <label>Остаток (число или inf)<input name="stock" value="inf"></label>
+    <label>Ограничение на одного человека
+      <input type="number" name="max_per_user" min="1" value="2" placeholder="пусто = без ограничения">
+      <span class="muted">Сколько штук может купить один участник. Пустое поле — без ограничения.</span>
+    </label>
     <label>Мин. ранг
       <select name="min_rank">
-        {% for rank in ranks %}<option value="{{ rank.value }}">{{ rank_labels.get(rank.value, rank.value) }}</option>{% endfor %}
+        {% for rank in ranks %}<option value="{{ rank }}">{{ rank_labels.get(rank, rank) }}</option>{% endfor %}
       </select>
     </label>
     <label>Тип
-      <select name="kind">
+      <select name="kind" id="product-kind">
         {% for kind in kinds %}<option value="{{ kind.value }}">{{ kind_labels.get(kind.value, kind.value) }}</option>{% endfor %}
       </select>
     </label>
     <label>Фото<input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+    <div id="service-fields" class="service-only-fields is-hidden" hidden>
+      <label>Респект исполнителю<input type="number" name="respect_reward" id="product-respect" min="0" placeholder="авто" disabled></label>
+      <label class="span-all">Навыки услуги (мультивыбор)
+        <select name="skill_ids" id="product-skills" multiple size="6" disabled>
+          {% for skill in skills %}
+          <option value="{{ skill.id }}" data-grace="{{ skill.grace_price }}" data-respect="{{ skill.respect_reward }}">
+            {{ skill.title }} — {{ skill.grace_price }} бл. / {{ skill.respect_reward }} респ.
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <p class="muted span-all" id="skill-hint">Навыки доступны только для типа «Услуга».</p>
+    </div>
     <label style="grid-column:1/-1">Описание<textarea name="description" required></textarea></label>
     <div class="actions"><button type="submit">Добавить</button></div>
   </form>
 </div>
+<script>
+(function () {
+  const kind = document.getElementById("product-kind");
+  const serviceFields = document.getElementById("service-fields");
+  const skills = document.getElementById("product-skills");
+  const price = document.getElementById("product-price");
+  const respect = document.getElementById("product-respect");
+  const hint = document.getElementById("skill-hint");
+  if (!kind || !serviceFields || !skills || !price || !hint) return;
+
+  function recalc() {
+    let grace = 0;
+    let resp = 0;
+    for (const opt of skills.selectedOptions) {
+      grace += Number(opt.dataset.grace || 0);
+      resp += Number(opt.dataset.respect || 0);
+    }
+    hint.textContent = grace
+      ? `Рекомендуемая цена: ${grace} благодати; респект: ${resp}.`
+      : "Рекомендуемая цена и респект появятся после выбора навыков.";
+    if (grace && (!price.value || Number(price.value) < grace)) price.value = String(grace);
+    if (resp && respect && !respect.value) respect.value = String(resp);
+  }
+
+  function syncKind() {
+    const isService = kind.value === "service";
+    serviceFields.hidden = !isService;
+    serviceFields.classList.toggle("is-hidden", !isService);
+    skills.disabled = !isService;
+    if (respect) respect.disabled = !isService;
+    if (!isService) {
+      for (const opt of skills.options) opt.selected = false;
+      if (respect) respect.value = "";
+      hint.textContent = "Навыки доступны только для типа «Услуга».";
+    } else {
+      recalc();
+    }
+  }
+
+  kind.addEventListener("change", syncKind);
+  skills.addEventListener("change", recalc);
+  syncKind();
+})();
+</script>
 {% endif %}
 
 <div class="panel">
@@ -36,8 +97,9 @@
       <thead>
         <tr>
           <th></th><th>Артикул</th><th>Название</th><th>Цена</th><th>Остаток</th>
-          <th>Ранг</th><th>Тип</th><th>Видимость</th>
-          {% if can_store %}<th>Правка</th>{% endif %}
+          <th>На человека</th>
+          <th>Ранг</th><th>Тип</th><th>Навыки</th><th>Респект</th><th>Видимость</th>
+          {% if can_store %}<th></th>{% endif %}
         </tr>
       </thead>
       <tbody>
@@ -57,43 +119,291 @@
           </td>
           <td>{{ product.price }}</td>
           <td>{% if product.stock is none %}∞{% else %}{{ product.stock }}{% endif %}</td>
-          <td>{{ rank_labels.get(product.min_rank.value, product.min_rank.value) }}</td>
+          <td>{% if product.max_per_user is none %}∞{% else %}{{ product.max_per_user }}{% endif %}</td>
+          <td>{{ rank_labels.get(product.min_rank|catalog_key, product.min_rank|catalog_key) }}</td>
           <td>{{ kind_labels.get(product.kind.value, product.kind.value) }}</td>
+          <td>
+            {% if product.skill_ids %}
+            {% for sid in product.skill_ids %}
+            <span class="badge">{{ skill_titles.get(sid, sid) }}</span>
+            {% endfor %}
+            {% else %}—{% endif %}
+          </td>
+          <td>{% if product.respect_reward is not none %}{{ product.respect_reward }}{% else %}—{% endif %}</td>
           <td>{% if product.is_visible %}да{% else %}нет{% endif %}</td>
           {% if can_store %}
-          <td>
-            <form method="post" action="/shop/products/{{ product.id }}/edit" class="inline-edit">
-              <select name="field">
-                <option value="article">article</option>
-                <option value="name">name</option>
-                <option value="description">description</option>
-                <option value="price">price</option>
-                <option value="stock">stock</option>
-                <option value="visible">visible</option>
-                <option value="min_rank">min_rank</option>
-                <option value="kind">kind</option>
-              </select>
-              <input name="value" required placeholder="значение">
-              <button type="submit" class="secondary">OK</button>
+          <td class="actions">
+            <button
+              type="button"
+              class="secondary js-product-edit"
+              data-id="{{ product.id }}"
+              data-article="{{ product.article }}"
+              data-name="{{ product.name }}"
+              data-description="{{ product.description }}"
+              data-price="{{ product.price }}"
+              data-stock="{% if product.stock is none %}inf{% else %}{{ product.stock }}{% endif %}"
+              data-min-rank="{{ product.min_rank|catalog_key }}"
+              data-kind="{{ product.kind.value }}"
+              data-skills="{{ (product.skill_ids or [])|join(',') }}"
+              data-respect="{% if product.respect_reward is not none %}{{ product.respect_reward }}{% endif %}"
+              data-visible="{{ '1' if product.is_visible else '0' }}"
+              data-max-per-user="{% if product.max_per_user is not none %}{{ product.max_per_user }}{% endif %}"
+              data-image="{% if product.image_path %}/uploads/{{ product.image_path }}{% endif %}"
+            >Редактировать</button>
+            {% if product.shop_message_id %}
+            <form method="post" action="/shop/products/{{ product.id }}/unpublish" onsubmit="return confirm('Убрать карточку из топика Магазин?');">
+              <button type="submit" class="secondary">Убрать из витрины</button>
             </form>
-            <form method="post" action="/shop/products/{{ product.id }}/image" enctype="multipart/form-data" class="inline-edit" style="margin-top:0.4rem">
-              <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif" required>
-              <button type="submit" class="secondary">Фото</button>
+            {% else %}
+            <form method="post" action="/shop/products/{{ product.id }}/publish">
+              <button type="submit" class="secondary">В витрину</button>
+            </form>
+            {% endif %}
+            <form method="post" action="/shop/products/{{ product.id }}/delete" onsubmit="return confirm('Удалить товар полностью?');">
+              <button type="submit" class="danger">Удалить</button>
             </form>
           </td>
           {% endif %}
         </tr>
         {% else %}
-        <tr><td colspan="{% if can_store %}9{% else %}8{% endif %}" class="muted">Товаров пока нет</td></tr>
+        <tr><td colspan="{% if can_store %}12{% else %}11{% endif %}" class="muted">Товаров пока нет</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
 
+{% if can_store %}
+<dialog id="product-edit-dialog" class="modal modal-wide">
+  <form method="post" enctype="multipart/form-data" class="modal-card" id="product-edit-form">
+    <h2 class="modal-title">Редактировать товар <span class="muted" id="edit-product-id"></span></h2>
+    <div class="form-grid">
+      <label>Артикул<input name="article" id="edit-article" required></label>
+      <label>Название<input name="name" id="edit-name" required></label>
+      <label>Цена (благодать)<input type="number" name="price" id="edit-price" min="0" required></label>
+      <label>Остаток (число или inf)<input name="stock" id="edit-stock"></label>
+      <label>Ограничение на одного человека
+        <input type="number" name="max_per_user" id="edit-max-per-user" min="1" placeholder="пусто = без ограничения">
+        <span class="muted">Сколько штук может купить один участник. Пустое поле — без ограничения.</span>
+      </label>
+      <label>Мин. ранг
+        <select name="min_rank" id="edit-min-rank">
+          {% for rank in ranks %}<option value="{{ rank }}">{{ rank_labels.get(rank, rank) }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Тип
+        <select name="kind" id="edit-kind">
+          {% for kind in kinds %}<option value="{{ kind.value }}">{{ kind_labels.get(kind.value, kind.value) }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Видимость
+        <select name="is_visible" id="edit-visible">
+          <option value="1">да</option>
+          <option value="0">нет</option>
+        </select>
+      </label>
+      <label>Фото
+        <input type="file" name="image" id="edit-image" accept="image/jpeg,image/png,image/webp,image/gif">
+        <span class="muted" id="edit-image-hint">Оставьте пустым, чтобы не менять</span>
+      </label>
+      <div id="edit-service-fields" class="service-only-fields is-hidden" hidden>
+        <label>Респект исполнителю<input type="number" name="respect_reward" id="edit-respect" min="0" placeholder="авто" disabled></label>
+        <label class="span-all">Навыки услуги (мультивыбор)
+          <select name="skill_ids" id="edit-skills" multiple size="6" disabled>
+            {% for skill in skills %}
+            <option value="{{ skill.id }}" data-grace="{{ skill.grace_price }}" data-respect="{{ skill.respect_reward }}">
+              {{ skill.title }} — {{ skill.grace_price }} бл. / {{ skill.respect_reward }} респ.
+            </option>
+            {% endfor %}
+          </select>
+        </label>
+        <p class="muted span-all" id="edit-skill-hint">Навыки доступны только для типа «Услуга».</p>
+      </div>
+      <label class="span-all">Описание<textarea name="description" id="edit-description" required rows="4"></textarea></label>
+    </div>
+    <div class="actions modal-actions">
+      <button type="button" class="secondary" id="edit-cancel">Отмена</button>
+      <button type="submit">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+<script>
+(function () {
+  const dialog = document.getElementById("product-edit-dialog");
+  const form = document.getElementById("product-edit-form");
+  if (!dialog || !form) return;
+
+  const kind = document.getElementById("edit-kind");
+  const serviceFields = document.getElementById("edit-service-fields");
+  const skills = document.getElementById("edit-skills");
+  const price = document.getElementById("edit-price");
+  const respect = document.getElementById("edit-respect");
+  const hint = document.getElementById("edit-skill-hint");
+  const visible = document.getElementById("edit-visible");
+  const imageHint = document.getElementById("edit-image-hint");
+  const imageInput = document.getElementById("edit-image");
+  const cancel = document.getElementById("edit-cancel");
+
+  function recalc() {
+    let grace = 0;
+    let resp = 0;
+    for (const opt of skills.selectedOptions) {
+      grace += Number(opt.dataset.grace || 0);
+      resp += Number(opt.dataset.respect || 0);
+    }
+    hint.textContent = grace
+      ? `Рекомендуемая цена: ${grace} благодати; респект: ${resp}.`
+      : "Рекомендуемая цена и респект появятся после выбора навыков.";
+  }
+
+  function syncKind() {
+    const isService = kind.value === "service";
+    serviceFields.hidden = !isService;
+    serviceFields.classList.toggle("is-hidden", !isService);
+    skills.disabled = !isService;
+    if (respect) respect.disabled = !isService;
+    if (!isService) {
+      for (const opt of skills.options) opt.selected = false;
+      if (respect) respect.value = "";
+      hint.textContent = "Навыки доступны только для типа «Услуга».";
+    } else {
+      recalc();
+    }
+  }
+
+  function fillForm(btn) {
+    form.setAttribute("action", `/shop/products/${btn.dataset.id}/edit`);
+    document.getElementById("edit-product-id").textContent = `#${btn.dataset.id}`;
+    document.getElementById("edit-article").value = btn.dataset.article || "";
+    document.getElementById("edit-name").value = btn.dataset.name || "";
+    document.getElementById("edit-description").value = btn.dataset.description || "";
+    document.getElementById("edit-price").value = btn.dataset.price || "";
+    document.getElementById("edit-stock").value = btn.dataset.stock || "inf";
+    document.getElementById("edit-max-per-user").value = btn.dataset.maxPerUser || "";
+    document.getElementById("edit-min-rank").value = btn.dataset.minRank || "novice";
+    kind.value = btn.dataset.kind || "merch";
+    respect.value = btn.dataset.respect || "";
+    visible.value = btn.dataset.visible === "1" ? "1" : "0";
+    const selected = new Set((btn.dataset.skills || "").split(",").filter(Boolean));
+    for (const opt of skills.options) opt.selected = selected.has(opt.value);
+    if (imageInput) imageInput.value = "";
+    if (imageHint) {
+      imageHint.textContent = btn.dataset.image
+        ? "Текущее фото есть. Выберите файл, чтобы заменить."
+        : "Фото пока нет. Можно загрузить сейчас.";
+    }
+    syncKind();
+  }
+
+  document.querySelectorAll(".js-product-edit").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      fillForm(btn);
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    });
+  });
+
+  cancel.addEventListener("click", () => {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  });
+
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) {
+      if (typeof dialog.close === "function") dialog.close();
+      else dialog.removeAttribute("open");
+    }
+  });
+
+  kind.addEventListener("change", syncKind);
+  skills.addEventListener("change", recalc);
+})();
+</script>
+{% endif %}
+
 {% if can_orders %}
 <div class="panel">
-  <h2>Заказы</h2>
+  <h2>Заказы в ожидании исполнения</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Заказчик</th><th>Навыки</th><th>Цена</th><th>Респект</th><th>Описание</th><th>Статус</th><th>Исполнитель</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for job in service_jobs %}
+        <tr>
+          <td>{{ job.id }}</td>
+          <td>
+            {% if job.customer and job.customer.username %}
+            <a href="https://t.me/{{ job.customer.username }}" target="_blank" rel="noopener">@{{ job.customer.username }}</a>
+            <div class="muted">{{ job.customer.full_name }}</div>
+            {% elif job.customer %}
+            {{ job.customer.full_name }}
+            <div class="muted">id {{ job.customer.telegram_id }}</div>
+            {% else %}
+            id {{ job.customer_id }}
+            {% endif %}
+          </td>
+          <td>
+            {% for sid in job.skill_ids or [] %}
+            <span class="badge">{{ skill_titles.get(sid, sid) }}</span>
+            {% endfor %}
+          </td>
+          <td>{{ job.price }}</td>
+          <td>{{ job.respect_reward }}</td>
+          <td class="job-desc-cell">
+            <details class="job-desc">
+              <summary>
+                {% set preview = job.description or '' %}
+                {% if preview|length > 72 %}{{ preview[:72] }}…{% else %}{{ preview or '—' }}{% endif %}
+              </summary>
+              <pre class="box job-desc-full">{{ job.description }}</pre>
+              {% if job.assignee_note %}
+              <div class="muted" style="margin-top:0.35rem">Для исполнителя:</div>
+              <pre class="box job-desc-full">{{ job.assignee_note }}</pre>
+              {% endif %}
+              {% if job.result_text or job.result_media %}
+              <div class="muted" style="margin-top:0.35rem">Отчёт исполнителя:</div>
+              <pre class="box job-desc-full">{{ job.result_text or '—' }}</pre>
+              {% if job.result_media %}<div class="muted">Вложений в отчёте: {{ job.result_media|length }}</div>{% endif %}
+              {% endif %}
+              {% if job.content_item_id %}<div class="muted">Пост модерации #{{ job.content_item_id }}</div>{% endif %}
+              {% if job.product %}<div class="muted">каталог: [{{ job.product.article }}] {{ job.product.name }}</div>{% endif %}
+              {% if job.order_id %}<div class="muted">заказ #{{ job.order_id }}</div>{% endif %}
+              {% if job.media %}
+              <div class="muted">Вложений: {{ job.media|length }}</div>
+              {% endif %}
+            </details>
+          </td>
+          <td>{{ job_status_labels.get(job.status.value, job.status.value) }}</td>
+          <td>
+            {% if job.assignee %}
+              {% if job.assignee.username %}
+              <a href="https://t.me/{{ job.assignee.username }}" target="_blank" rel="noopener">@{{ job.assignee.username }}</a>
+              {% else %}
+              {{ job.assignee.full_name }}
+              {% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td class="actions">
+            <form method="post" action="/shop/jobs/{{ job.id }}/done">
+              <button type="submit">Готово</button>
+            </form>
+            <form method="post" action="/shop/jobs/{{ job.id }}/cancel">
+              <button type="submit" class="danger">Отменить</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="muted">Нет открытых заказов</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Услуги</h2>
   <div class="table-wrap">
     <table>
       <thead>
@@ -126,7 +436,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="muted">Очередь пуста</td></tr>
+        <tr><td colspan="7" class="muted">Нет услуг в очереди</td></tr>
         {% endfor %}
       </tbody>
     </table>

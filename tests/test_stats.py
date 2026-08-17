@@ -15,6 +15,8 @@ from lab21_bot.models import (
     OrderStatus,
     Product,
     ProductKind,
+    ServiceJob,
+    ServiceJobStatus,
     StaffRole,
     User,
 )
@@ -77,6 +79,14 @@ async def test_dashboard_stats(session: AsyncSession) -> None:
                 status=OrderStatus.FULFILLED,
                 created_at=now,
             ),
+            ServiceJob(
+                customer_id=2,
+                skill_ids=["solder_master"],
+                description="Собрать модуль",
+                price=10,
+                respect_reward=1,
+                status=ServiceJobStatus.OPEN,
+            ),
             ContentItem(
                 author_id=2,
                 kind=ContentKind.STORY,
@@ -120,8 +130,9 @@ async def test_dashboard_stats(session: AsyncSession) -> None:
 
     stats = await dashboard_stats(session, now=now)
     assert stats.users_total == 2
-    assert stats.users_active == 2
+    assert stats.users_new == 1
     assert stats.balance_sum == 50
+    assert stats.jobs_open == 1
     assert stats.orders_pending == 1
     assert stats.orders_fulfilled == 1
     assert stats.content_moderation == 1

@@ -1,0 +1,12 @@
+{
+  "prefixes": [
+    {"min_respect": 0, "label": "обычный"},
+    {"min_respect": 11, "label": "узнаваемый"},
+    {"min_respect": 51, "label": "проверенный"},
+    {"min_respect": 151, "label": "ветеран"},
+    {"min_respect": 301, "label": "легенда"},
+    {"min_respect": 601, "label": "миф"},
+    {"min_respect": 1201, "label": "апостол"},
+    {"min_respect": 2501, "label": "омниссия"}
+  ]
+}

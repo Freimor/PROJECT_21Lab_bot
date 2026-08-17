@@ -22,6 +22,7 @@ class Permission(StrEnum):
 
 _ALL_EXCEPT_SYSTEM = frozenset(p for p in Permission if p is not Permission.MANAGE_SYSTEM)
 
+# Fallback when the DB catalog is not loaded yet (tests / early boot).
 ROLE_PERMISSIONS: dict[StaffRole, frozenset[Permission]] = {
     StaffRole.LORD: frozenset(Permission),
     StaffRole.MAGISTER: _ALL_EXCEPT_SYSTEM,
@@ -73,28 +74,77 @@ def require_approved(user: User) -> None:
         raise AccessDenied("Заявка ещё не одобрена администратором")
 
 
+async def require_approved_user(session: AsyncSession, user: User) -> User:
+    """Like ``require_approved``, but distinguishes «нет заявки» vs «ждёт решения»."""
+    if user.is_approved:
+        return user
+    from lab21_bot.data import phrase
+    from lab21_bot.services.applications import get_pending_application
+
+    pending = await get_pending_application(session, user.telegram_id)
+    if pending is not None:
+        raise AccessDenied(phrase("onboarding", "pending_wait"))
+    raise AccessDenied(phrase("onboarding", "need_apply"))
+
+
 def has_permission(user: User, permission: Permission) -> bool:
-    return user.staff_role is not None and permission in ROLE_PERMISSIONS[user.staff_role]
+    if user.staff_role is None:
+        return False
+    from lab21_bot.services.ranks_catalog import get_roles_snapshot, permissions_for_role
+
+    if get_roles_snapshot():
+        return permission in permissions_for_role(str(user.staff_role))
+    if isinstance(user.staff_role, StaffRole):
+        return permission in ROLE_PERMISSIONS.get(user.staff_role, frozenset())
+    return False
 
 
 def require_permission(user: User, permission: Permission) -> None:
     if not has_permission(user, permission):
-        raise AccessDenied(f"Требуется право: {permission.value}")
+        raise AccessDenied("У тебя нет прав на это действие")
+
+
+def _role_is_unique(role: StaffRole | str | None) -> bool:
+    if role is None:
+        return False
+    from lab21_bot.services.ranks_catalog import role_by_id
+
+    item = role_by_id(str(role))
+    if item is not None:
+        return bool(item.get("is_unique"))
+    return role == StaffRole.LORD or str(role) == StaffRole.LORD.value
 
 
 async def set_staff_role(
     session: AsyncSession,
     actor: User,
     target: User,
-    role: StaffRole | None,
+    role: StaffRole | str | None,
 ) -> None:
     require_permission(actor, Permission.MANAGE_STAFF)
+    actor_unique = _role_is_unique(actor.staff_role)
     if (
         target.telegram_id == actor.telegram_id
-        and actor.staff_role is StaffRole.LORD
-        and role is not StaffRole.LORD
+        and actor_unique
+        and not _role_is_unique(role)
     ):
         raise AccessDenied("Лорд не может снять собственные полномочия")
+    if _role_is_unique(role):
+        existing = await session.scalar(
+            select(User).where(
+                User.staff_role == str(role),
+                User.telegram_id != target.telegram_id,
+            )
+        )
+        if existing is not None:
+            if str(role) == StaffRole.LORD.value:
+                raise AccessDenied("Тёмный лорд в системе может быть только один")
+            raise AccessDenied("Уникальная роль уже назначена другому пользователю")
+    if role is not None:
+        from lab21_bot.services.ranks_catalog import role_by_id
+
+        if role_by_id(str(role)) is None and not isinstance(role, StaffRole):
+            raise AccessDenied(f"Неизвестная роль: {role}")
     previous = target.staff_role
     target.staff_role = role
     if role is not None:
@@ -108,8 +158,8 @@ async def set_staff_role(
             action="set_staff_role",
             target_id=target.telegram_id,
             details={
-                "from": previous.value if previous else None,
-                "to": role.value if role else None,
+                "from": str(previous) if previous else None,
+                "to": str(role) if role else None,
             },
         )
     )

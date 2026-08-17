@@ -6,15 +6,49 @@
 
 <div class="grid">
   <div class="stat"><div class="label">Участники</div><div class="value">{{ stats.users_total }}</div></div>
-  <div class="stat"><div class="label">Активные</div><div class="value">{{ stats.users_active }}</div></div>
+  <div class="stat">
+    <div class="label">Новые участники</div>
+    <div class="value">{{ stats.users_new }}</div>
+    <div class="period-pills compact">
+      {% for key in period_keys %}
+      <a
+        class="{% if new_period == key %}active{% endif %}"
+        href="/?new={{ key }}&journal_period={{ journal_period }}{% if date_from %}&from={{ date_from }}{% endif %}{% if date_to %}&to={{ date_to }}{% endif %}"
+      >{{ period_labels[key] }}</a>
+      {% endfor %}
+    </div>
+  </div>
   <div class="stat"><div class="label">Сумма благодати</div><div class="value">{{ stats.balance_sum }}</div></div>
-  <div class="stat"><div class="label">Заказы в очереди</div><div class="value">{{ stats.orders_pending }}</div></div>
-  <div class="stat"><div class="label">Выданные заказы</div><div class="value">{{ stats.orders_fulfilled }}</div></div>
+  <div class="stat"><div class="label">Заказы в очереди</div><div class="value">{{ stats.jobs_open }}</div></div>
+  <div class="stat"><div class="label">Услуги в очереди</div><div class="value">{{ stats.orders_pending }}</div></div>
+  <div class="stat"><div class="label">Выданные услуги</div><div class="value">{{ stats.orders_fulfilled }}</div></div>
   <div class="stat"><div class="label">На модерации</div><div class="value">{{ stats.content_moderation }}</div></div>
 </div>
 
 <div class="panel">
-  <h2>Журнал</h2>
+  <div class="panel-head">
+    <h2>Журнал</h2>
+  </div>
+  <form method="get" class="journal-filters" action="/">
+    <input type="hidden" name="new" value="{{ new_period }}">
+    <div class="period-pills">
+      {% for key in period_keys %}
+      <a
+        class="{% if journal_period == key and not date_from and not date_to %}active{% endif %}"
+        href="/?new={{ new_period }}&journal_period={{ key }}"
+      >{{ period_labels[key] }}</a>
+      {% endfor %}
+    </div>
+    <div class="date-range">
+      <label>С
+        <input type="date" name="from" value="{{ date_from }}">
+      </label>
+      <label>По
+        <input type="date" name="to" value="{{ date_to }}">
+      </label>
+      <button type="submit">Показать</button>
+    </div>
+  </form>
   <div class="table-wrap">
     <table>
       <thead>
@@ -28,7 +62,7 @@
           <td>{{ event.detail }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="3" class="muted">Событий пока нет</td></tr>
+        <tr><td colspan="3" class="muted">Событий за выбранный период нет</td></tr>
         {% endfor %}
       </tbody>
     </table>

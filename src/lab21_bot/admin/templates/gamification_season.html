@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "gamification_nav.html" import game_tabs %}
+{% from "placeholder_legend.html" import placeholder_legend %}
+{% block title %}Сезон {{ season.code }} — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Сезон «{{ season.title }}»</h1>
+{{ game_tabs('seasons') }}
+<p><a href="/gamification/seasons">← К карте года</a>
+  · <a href="/gamification/seasons?copy={{ season.id }}">Копировать в создание</a></p>
+
+<section class="panel">
+  <h2>Редактировать</h2>
+  <form method="post" action="/gamification/seasons/{{ season.id }}/update" class="stack">
+    <label>Название <input name="title" required value="{{ season.title }}"></label>
+    <label>Описание <textarea name="description" rows="3">{{ season.description }}</textarea></label>
+    <label>Начало <input type="date" name="starts_on" required value="{{ season.starts_on.isoformat() }}"></label>
+    <label>Конец <input type="date" name="ends_on" required value="{{ season.ends_on.isoformat() }}"></label>
+    <label>Коллекция мемов
+      <select name="meme_collection">
+        {% for col in meme_collections %}
+        <option value="{{ col.key }}" {% if season.meme_collection == col.key %}selected{% endif %}>
+          {{ col.key }}{% if col.meme_count %} · {{ col.meme_count }} мем.{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Ключ фраз
+      <select name="phrases_key">
+        <option value="" {% if not season.phrases_key %}selected{% endif %}>Обычные фразы</option>
+        {% for item in phrase_keys %}
+        <option value="{{ item.key }}" {% if season.phrases_key == item.key %}selected{% endif %}>
+          {{ item.key }}{% if item.phrase_count %} · {{ item.phrase_count }} фраз.{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="token-field">
+      <div class="stack">
+        <label>Сообщение о начале
+          <textarea name="start_message" rows="4">{{ season.start_message or season_start_default }}</textarea>
+        </label>
+        <label>Сообщение о конце
+          <textarea name="end_message" rows="3">{{ season.end_message or season_end_default }}</textarea>
+        </label>
+      </div>
+      {{ placeholder_legend(season_announce_placeholders, note='Посты уйдут в «Важное»: начало — в день старта, конец — на следующий день после даты «По» (около 9:05).') }}
+    </div>
+    <label class="check-row">
+      <input type="checkbox" name="is_enabled" value="1" {% if season.is_enabled %}checked{% endif %}>
+      Сезон включён
+    </label>
+    <div class="actions">
+      <button type="submit">Сохранить</button>
+      <button type="submit" class="danger" formaction="/gamification/seasons/{{ season.id }}/delete"
+              onclick="return confirm('Удалить сезон?')">Удалить</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

@@ -54,7 +54,7 @@ async def test_transfer_requires_adepts_and_enforces_daily_limit(
         telegram_id=10,
         full_name="Первый",
         rank=CommunityRank.ADEPT,
-        balance=100,
+        balance=250,
     )
     recipient = User(
         telegram_id=20,
@@ -88,7 +88,7 @@ async def test_transfer_requires_adepts_and_enforces_daily_limit(
     )
     assert outgoing.delta == -30
     assert incoming.delta == 30
-    assert sender.balance == 70
+    assert sender.balance == 220
     assert recipient.balance == 30
 
     with pytest.raises(EconomyError, match="лимит"):
@@ -104,12 +104,53 @@ async def test_transfer_requires_adepts_and_enforces_daily_limit(
         )
 
 
+async def test_transfer_keeps_base_grace(session: AsyncSession) -> None:
+    sender = User(
+        telegram_id=11,
+        full_name="Первый",
+        rank=CommunityRank.ADEPT,
+        balance=160,
+        is_approved=True,
+    )
+    recipient = User(
+        telegram_id=21,
+        full_name="Второй",
+        rank=CommunityRank.ADEPT,
+        is_approved=True,
+    )
+    session.add_all([sender, recipient])
+    await session.flush()
+
+    with pytest.raises(EconomyError, match="базовой 🙏"):
+        await transfer(
+            session,
+            sender.telegram_id,
+            recipient.telegram_id,
+            20,
+            "Слишком много",
+            0,
+            idempotency_key="transfer-base-1",
+        )
+
+    await transfer(
+        session,
+        sender.telegram_id,
+        recipient.telegram_id,
+        10,
+        "Излишек",
+        0,
+        idempotency_key="transfer-base-2",
+    )
+    assert sender.balance == 150
+    assert recipient.balance == 10
+
+
 async def test_transfer_is_idempotent(session: AsyncSession) -> None:
     sender = User(
         telegram_id=100,
         full_name="Первый",
         rank=CommunityRank.ADEPT,
-        balance=40,
+        balance=200,
     )
     recipient = User(
         telegram_id=200,
@@ -123,7 +164,7 @@ async def test_transfer_is_idempotent(session: AsyncSession) -> None:
     second = await transfer(session, 100, 200, 10, "За фикс", 0, idempotency_key="same")
 
     assert first[0].id == second[0].id
-    assert sender.balance == 30
+    assert sender.balance == 190
     assert recipient.balance == 10
 
 
@@ -168,3 +209,33 @@ async def test_respect_grant_withdraw_no_transfer(session: AsyncSession) -> None
             "Нельзя",
             grant=True,
         )
+
+
+async def test_content_rewards_idempotent(session: AsyncSession) -> None:
+    from lab21_bot.models import LedgerType
+    from lab21_bot.services.economy import reward_meme_approve, reward_post_publish
+
+    author = User(
+        telegram_id=50,
+        full_name="Автор",
+        is_approved=True,
+        balance=0,
+        respect=0,
+    )
+    session.add(author)
+    await session.flush()
+
+    await reward_post_publish(session, item_id=7, author_id=50)
+    await reward_post_publish(session, item_id=7, author_id=50)
+    assert author.balance == 20
+    assert author.respect == 5
+
+    await reward_meme_approve(session, item_id=9, author_id=50)
+    await reward_meme_approve(session, item_id=9, author_id=50)
+    assert author.balance == 25
+    assert author.respect == 6
+
+    types = set(await session.scalars(select(LedgerEntry.entry_type)))
+    assert LedgerType.POST_REWARD in types
+    assert LedgerType.MEME_REWARD in types
+    assert LedgerType.RESPECT_GRANT in types

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "publications_nav.html" import pub_tabs, llm_tabs %}
+{% block title %}Журнал постов — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Посты с LLM</h1>
+<p class="page-sub">Будни и Важное: исходник, черновик LLM и статус.</p>
+{{ pub_tabs(pub_section, can_settings, can_queue, badges) }}
+{{ llm_tabs(pub_section, can_settings, can_queue) }}
+
+<div class="panel" style="margin-bottom:1rem">
+  <form method="get" action="/publications/llm/journal" class="actions" style="gap:0.75rem;flex-wrap:wrap">
+    <label class="muted" style="display:flex;align-items:center;gap:0.5rem">
+      Статус
+      <select name="status" onchange="this.form.submit()">
+        <option value="">Все</option>
+        {% for value, label in status_labels.items() %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+</div>
+
+{% if items %}
+<div class="meme-table-wrap">
+  <table class="data-table" style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Тип</th>
+        <th>Статус</th>
+        <th>Автор</th>
+        <th>Создано</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item.id }}</td>
+        <td>{{ kind_labels.get(item.kind.value, item.kind.value) }}</td>
+        <td>{{ status_labels.get(item.status.value, item.status.value) }}</td>
+        <td>
+          {% if item.author %}
+            {{ item.author.full_name }}
+            {% if item.author.username %}(@{{ item.author.username }}){% endif %}
+          {% else %}
+            {{ item.author_id }}
+          {% endif %}
+        </td>
+        <td class="muted">{{ item.created_at.strftime('%d.%m.%Y %H:%M') if item.created_at else '' }}</td>
+        <td>
+          {% if item.status.value == 'moderation' and can_queue %}
+          <a href="/publications#item-{{ item.id }}">В очередь</a>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td colspan="6">
+          <details>
+            <summary class="muted">Исходник / черновик</summary>
+            <pre class="source-block">{{ item.source_text }}</pre>
+            {% if item.draft_text and item.draft_text != item.source_text %}
+            <h3 style="margin:0.75rem 0 0.35rem;font-size:0.9rem;color:var(--muted)">Черновик LLM</h3>
+            <pre class="source-block">{{ item.draft_text }}</pre>
+            {% else %}
+            <p class="muted">Черновик LLM отсутствует или совпадает с исходником.</p>
+            {% endif %}
+          </details>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="panel muted">Постов пока нет.</div>
+{% endif %}
+{% endblock %}

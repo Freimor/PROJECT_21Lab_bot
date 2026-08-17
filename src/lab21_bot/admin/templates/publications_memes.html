@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% from "publications_nav.html" import pub_tabs %}
+{% block title %}Мемы — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Мемы</h1>
+<p class="page-sub">Заявки на коллекцию и статистика реакций автопостинга.</p>
+{{ pub_tabs(pub_section, can_settings, can_queue, badges) }}
+
+{% if can_settings %}
+<div class="panel" id="collections">
+  <h2>Коллекции мемов</h2>
+  <p class="muted" style="margin-top:0">Добавление и удаление пулов для автопостинга и сезонов.</p>
+  <form method="post" action="/publications/memes/collections/create" class="form-grid" style="margin-bottom:1rem">
+    <label>Новая коллекция
+      <input
+        name="key"
+        maxlength="64"
+        pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}"
+        placeholder="например: halloween"
+        required
+      >
+    </label>
+    <div class="actions" style="align-self:end">
+      <button type="submit">Создать</button>
+    </div>
+  </form>
+  {% if collections %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Ключ</th>
+          <th>Мемов</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for col in collections %}
+        <tr>
+          <td>
+            <a href="/publications/memes?collection={{ col.key }}&sort={{ 'asc' if reactions_asc else 'desc' }}">{{ col.key }}</a>
+          </td>
+          <td>{{ col.meme_count }}</td>
+          <td class="actions">
+            {% if col.key == 'default' %}
+            <span class="muted">системная</span>
+            {% elif col.meme_count == 0 %}
+            <form
+              method="post"
+              action="/publications/memes/collections/{{ col.key }}/delete"
+              onsubmit="return confirm('Удалить пустую коллекцию «{{ col.key }}»?');"
+            >
+              <button type="submit" class="danger">Удалить</button>
+            </form>
+            {% else %}
+            <button
+              type="button"
+              class="danger js-collection-delete"
+              data-key="{{ col.key }}"
+              data-count="{{ col.meme_count }}"
+            >Удалить</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+<dialog id="collection-delete-dialog" class="modal">
+  <form method="post" id="collection-delete-form" class="modal-card">
+    <h2 class="modal-title">Удалить коллекцию?</h2>
+    <p id="collection-delete-text" class="muted" style="margin:0 0 0.75rem"></p>
+    <label class="modal-note">Перенести все мемы в коллекцию
+      <select name="move_to" id="collection-delete-move" required></select>
+    </label>
+    <div class="actions modal-actions">
+      <button type="button" class="secondary" id="collection-delete-cancel">Отмена</button>
+      <button type="submit" class="danger">Удалить и перенести</button>
+    </div>
+  </form>
+</dialog>
+<script>
+(function () {
+  const dialog = document.getElementById("collection-delete-dialog");
+  const form = document.getElementById("collection-delete-form");
+  const text = document.getElementById("collection-delete-text");
+  const moveSelect = document.getElementById("collection-delete-move");
+  const cancel = document.getElementById("collection-delete-cancel");
+  if (!dialog || !form || !moveSelect) return;
+
+  const allKeys = {{ collection_keys_json }};
+
+  document.querySelectorAll(".js-collection-delete").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.getAttribute("data-key") || "";
+      const count = btn.getAttribute("data-count") || "0";
+      form.setAttribute("action", "/publications/memes/collections/" + encodeURIComponent(key) + "/delete");
+      text.textContent = "В коллекции «" + key + "» сейчас " + count + " мем(ов). Выберите, куда их перенести, затем подтвердите удаление.";
+      moveSelect.innerHTML = "";
+      allKeys.forEach((candidate) => {
+        if (candidate === key) return;
+        const opt = document.createElement("option");
+        opt.value = candidate;
+        opt.textContent = candidate;
+        if (candidate === "default") opt.selected = true;
+        moveSelect.appendChild(opt);
+      });
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    });
+  });
+
+  cancel.addEventListener("click", () => {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  });
+
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) {
+      if (typeof dialog.close === "function") dialog.close();
+      else dialog.removeAttribute("open");
+    }
+  });
+})();
+</script>
+{% endif %}
+
+{% if can_queue %}
+<h2 class="section-title">Заявки на добавление</h2>
+{% for item in applications %}
+<div class="panel">
+  <div class="actions" style="justify-content:space-between;margin-bottom:0.75rem">
+    <div>
+      <strong>#{{ item.id }}</strong>
+      ·
+      {% if item.author %}
+        {{ item.author.full_name }}
+        · мемов: {{ item.author.approved_meme_count }}
+      {% else %}
+        ID {{ item.author_id }}
+      {% endif %}
+    </div>
+    <span class="muted">{{ item.created_at.strftime('%d.%m.%Y %H:%M') if item.created_at else '' }}</span>
+  </div>
+  <pre class="source-block">{{ item.source_text }}</pre>
+  {% if item.media %}
+  <div class="meme-media">
+    {% for media in item.media %}
+      {% if media.type == 'photo' %}
+      <a href="/publications/memes/applications/{{ item.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">
+        <img
+          class="meme-thumb"
+          src="/publications/memes/applications/{{ item.id }}/media/{{ loop.index0 }}"
+          alt="Фото мема"
+          loading="lazy"
+        >
+      </a>
+      {% elif media.type == 'animation' %}
+      <a href="/publications/memes/applications/{{ item.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">
+        <video
+          class="meme-thumb"
+          src="/publications/memes/applications/{{ item.id }}/media/{{ loop.index0 }}"
+          autoplay
+          muted
+          loop
+          playsinline
+        ></video>
+      </a>
+      {% else %}
+      <span class="muted">{{ media.type or 'файл' }}</span>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if item.draft_text and item.draft_text != item.source_text %}
+  <h3 style="margin:0.75rem 0 0.35rem;font-size:0.9rem;color:var(--muted)">Вариант для коллекции</h3>
+  <pre class="source-block">{{ item.draft_text }}</pre>
+  {% endif %}
+  <form method="post" class="form-grid" style="margin-top:0.75rem">
+    <label>Название в коллекции
+      <input name="title" maxlength="160" placeholder="Авто из первой строки">
+    </label>
+    <label>Коллекция
+      <select name="collection_key" required>
+        {% for key in collection_keys %}
+        <option value="{{ key }}" {% if key == 'default' %}selected{% endif %}>{{ key }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="actions" style="grid-column:1/-1">
+      <button type="submit" formaction="/publications/memes/{{ item.id }}/approve">Добавить в коллекцию</button>
+      <button
+        type="button"
+        class="danger js-reject-open"
+        data-action="/publications/memes/{{ item.id }}/reject"
+        data-preview-id="reject-preview-meme-{{ item.id }}"
+      >Отклонить</button>
+    </div>
+  </form>
+  <div id="reject-preview-meme-{{ item.id }}" class="reject-source-data" hidden>
+    <pre class="source-block">{{ item.draft_text or item.source_text }}</pre>
+  </div>
+</div>
+{% else %}
+<div class="panel muted">Новых заявок на мемы нет.</div>
+{% endfor %}
+{% endif %}
+
+{% if can_settings %}
+<div class="panel">
+  <h2>Написать мем</h2>
+  <form method="post" action="/publications/memes/create" class="form-grid">
+    <label>Название
+      <input name="title" maxlength="160" placeholder="Авто из первой строки">
+    </label>
+    <label>Коллекция
+      <select name="collection_key" required>
+        {% for key in collection_keys %}
+        <option value="{{ key }}" {% if key == 'default' %}selected{% endif %}>{{ key }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label style="grid-column:1/-1">Текст
+      <textarea name="body" required rows="4" placeholder="Текст мема для автопостинга во флудилку"></textarea>
+    </label>
+    <div class="actions"><button type="submit">Добавить в коллекцию</button></div>
+  </form>
+</div>
+{% endif %}
+
+<div class="actions" style="margin:1rem 0 0.5rem;flex-wrap:wrap">
+  <a class="secondary {% if not collection_filter %}active{% endif %}" href="/publications/memes?sort={{ 'asc' if reactions_asc else 'desc' }}">Все</a>
+  {% for key in collection_keys %}
+  <a
+    class="secondary {% if collection_filter == key %}active{% endif %}"
+    href="/publications/memes?collection={{ key }}&sort={{ 'asc' if reactions_asc else 'desc' }}"
+  >{{ key }}</a>
+  {% endfor %}
+</div>
+
+<div class="meme-table-wrap">
+  <div class="meme-table-head">
+    <a
+      class="meme-sort"
+      href="/publications/memes?{% if collection_filter %}collection={{ collection_filter }}&{% endif %}sort={{ 'desc' if reactions_asc else 'asc' }}"
+      title="{{ 'Сначала больше реакций' if reactions_asc else 'Сначала меньше реакций' }}"
+    >
+      Реакций
+      <span class="meme-sort-dir" aria-hidden="true">{{ '↑' if reactions_asc else '↓' }}</span>
+    </a>
+  </div>
+
+  {% if collection %}
+  {% set max_reactions = collection|map(attribute='reaction_count')|max %}
+  <div class="meme-table">
+    {% for tpl in collection %}
+    {% set react_bg = temper_color(tpl.reaction_count, max_reactions) %}
+    <details class="meme-tr">
+      <summary>
+        <span
+          class="meme-react"
+          style="background:{{ react_bg }};color:{{ contrast_ink(react_bg) }}"
+        >{{ tpl.reaction_count }}</span>
+        <span class="meme-preview">
+          {% if tpl.media and tpl.media|length > 0 and tpl.media[0].type == 'photo' %}
+          <img
+            class="meme-thumb meme-thumb-inline"
+            src="/publications/memes/collection/{{ tpl.id }}/media/0"
+            alt=""
+            loading="lazy"
+          >
+          {% elif tpl.media and tpl.media|length > 0 and tpl.media[0].type == 'animation' %}
+          <video
+            class="meme-thumb meme-thumb-inline"
+            src="/publications/memes/collection/{{ tpl.id }}/media/0"
+            autoplay
+            muted
+            loop
+            playsinline
+          ></video>
+          {% endif %}
+          <span>{{ tpl.body[:40] }}{% if tpl.body|length > 40 %}…{% endif %}</span>
+        </span>
+        <span class="meme-author">{{ tpl.collection_key or 'default' }}</span>
+        <span class="meme-date">{{ tpl.created_at.strftime('%d.%m.%y') if tpl.created_at else '—' }}</span>
+      </summary>
+      <div class="meme-body">
+        {% if tpl.media %}
+        <div class="meme-media">
+          {% for media in tpl.media %}
+            {% if media.type == 'photo' %}
+            <a href="/publications/memes/collection/{{ tpl.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">
+              <img
+                class="meme-thumb"
+                src="/publications/memes/collection/{{ tpl.id }}/media/{{ loop.index0 }}"
+                alt="Фото мема"
+                loading="lazy"
+              >
+            </a>
+            {% elif media.type == 'animation' %}
+            <a href="/publications/memes/collection/{{ tpl.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">
+              <video
+                class="meme-thumb"
+                src="/publications/memes/collection/{{ tpl.id }}/media/{{ loop.index0 }}"
+                autoplay
+                muted
+                loop
+                playsinline
+              ></video>
+            </a>
+            {% else %}
+            <span class="muted">{{ media.type or 'файл' }}</span>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+        <pre class="source-block">{{ tpl.body }}</pre>
+        {% if can_settings %}
+        <div class="actions" style="flex-wrap:wrap">
+          <form method="post" action="/publications/memes/collection/{{ tpl.id }}/move" class="actions" style="gap:0.35rem">
+            <select name="collection_key" required>
+              {% for key in collection_keys %}
+              <option
+                value="{{ key }}"
+                {% if (tpl.collection_key or 'default') == key %}selected{% endif %}
+              >{{ key }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="secondary">Переместить</button>
+          </form>
+          <form method="post" action="/publications/memes/collection/{{ tpl.id }}/post-now">
+            <button type="submit">Запостить сейчас</button>
+          </form>
+          <form method="post" action="/publications/memes/collection/{{ tpl.id }}/delete">
+            <button type="submit" class="danger">Удалить мем</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="panel muted" style="margin:0;border-radius:0 0 var(--radius) var(--radius)">Коллекция пуста.</div>
+  {% endif %}
+</div>
+{% endblock %}

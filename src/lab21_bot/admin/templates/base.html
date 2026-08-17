@@ -7,19 +7,87 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/admin.css">
+  <link rel="stylesheet" href="/static/admin.css?v=20260814b">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
 <body>
 {% if user %}
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand">Lab<span>21</span> Admin</div>
+    <a class="brand" href="/" aria-label="Lab21">
+      <img class="brand-logo" src="/static/lab21-logo.png?v=2" alt="Lab21" width="112" height="81">
+    </a>
     <nav class="nav">
-      <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Дашборд</a>
-      {% if nav.can_people %}<a href="/people" class="{% if request.url.path.startswith('/people') %}active{% endif %}">Люди</a>{% endif %}
-      {% if nav.can_shop %}<a href="/shop" class="{% if request.url.path.startswith('/shop') %}active{% endif %}">Магазин</a>{% endif %}
-      {% if nav.can_moderation %}<a href="/moderation" class="{% if request.url.path.startswith('/moderation') %}active{% endif %}">Модерация</a>{% endif %}
+      <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
+        Дашборд
+        {% if badges and badges.has_joins %}
+        <span class="nav-badge" title="Заявки: сотрудники | участники">+{{ badges.join_staff }}|+{{ badges.join_community }}</span>
+        {% endif %}
+      </a>
+      {% if nav.can_people %}
+      <a href="/community" class="{% if request.url.path.startswith('/community') or request.url.path.startswith('/people') %}active{% endif %}">
+        Комьюнити
+        {% if badges and badges.has_joins %}
+        <span class="nav-badge" title="Заявки: сотрудники | участники">+{{ badges.join_staff }}|+{{ badges.join_community }}</span>
+        {% endif %}
+      </a>
+      {% endif %}
+      {% if nav.can_shop %}
+      <a href="/shop" class="{% if request.url.path.startswith('/shop') %}active{% endif %}">
+        Магазин
+        {% if badges and badges.has_shop %}
+        <span class="nav-badge" title="Заказы | услуги">+{{ badges.jobs }}|+{{ badges.orders }}</span>
+        {% endif %}
+      </a>
+      {% endif %}
+      {% if nav.can_publications %}
+      <a href="/publications" class="{% if request.url.path.startswith('/publications') or request.url.path.startswith('/moderation') %}active{% endif %}">
+        Публикации
+        {% if badges and badges.publications_total %}
+        <span class="nav-badge" title="Очередь / мемы">+{{ badges.publications_total }}</span>
+        {% endif %}
+      </a>
+      {% endif %}
+      {% if nav.can_gamification %}<a href="/gamification" class="{% if request.url.path.startswith('/gamification') %}active{% endif %}">Геймификация</a>{% endif %}
+      {% if nav.can_feedback %}
+      <a href="/feedback" class="{% if request.url.path.startswith('/feedback') %}active{% endif %}">
+        Баги
+        {% if badges and badges.feedback_total %}
+        <span class="nav-badge" title="Баги | предложения">+{{ badges.feedback_bugs }}|+{{ badges.feedback_upgrades }}</span>
+        {% endif %}
+      </a>
+      {% endif %}
+      {% if nav.can_settings %}
+      <div class="nav-flyout {% if request.url.path.startswith('/settings') %}active{% endif %}">
+        <a href="/settings" class="nav-flyout-trigger {% if request.url.path.startswith('/settings') %}active{% endif %}">Настройки</a>
+        <div class="nav-flyout-menu" role="menu">
+          <a
+            href="/settings/notifications"
+            role="menuitem"
+            class="{% if request.url.path.startswith('/settings/notifications') %}active{% endif %}"
+          >Уведомления</a>
+          <a
+            href="/settings/llm"
+            role="menuitem"
+            class="{% if request.url.path.startswith('/settings/llm') %}active{% endif %}"
+          >Настройки LLM</a>
+        </div>
+      </div>
+      {% endif %}
+      <div class="nav-flyout {% if request.url.path.startswith('/faq') %}active{% endif %}">
+        <a href="/faq" class="nav-flyout-trigger {% if request.url.path.startswith('/faq') %}active{% endif %}">FAQ</a>
+        <div class="nav-flyout-menu" role="menu">
+          {% for page in faq_pages %}
+          <a
+            href="/faq/{{ page.slug }}"
+            role="menuitem"
+            class="{% if request.url.path == '/faq/' ~ page.slug %}active{% endif %}"
+          >{{ page.title }}</a>
+          {% else %}
+          <span class="muted">Топиков пока нет</span>
+          {% endfor %}
+        </div>
+      </div>
     </nav>
     <div class="user-box">
       <div class="user-row">
@@ -30,7 +98,7 @@
         {% endif %}
         <div>
           <strong>{{ user.full_name }}</strong>
-          {% if user.username %}@{{ user.username }} · {% endif %}{{ role_labels.get(user.staff_role.value, user.staff_role.value) }}
+          {% if user.username %}@{{ user.username }} · {% endif %}{{ role_labels.get(user.staff_role|catalog_key, user.staff_role|catalog_key) }}
         </div>
       </div>
       <form method="post" action="/logout" style="margin-top:0.75rem">
@@ -44,6 +112,155 @@
     {% block content %}{% endblock %}
   </main>
 </div>
+
+<dialog id="reject-dialog" class="modal">
+  <form method="post" id="reject-form" class="modal-card">
+    <h2 class="modal-title">Подтверждаете удаление?</h2>
+    <div id="reject-preview" class="modal-preview"></div>
+    <label class="modal-note">Комментарий автору (опционально)
+      <textarea name="note" id="reject-note" rows="3" maxlength="1000"
+                placeholder="Если пусто — отправится стандартный ответ бота"></textarea>
+    </label>
+    <div class="actions modal-actions">
+      <button type="button" class="secondary" id="reject-cancel">Отмена</button>
+      <button type="submit" class="danger">Отклонить</button>
+    </div>
+  </form>
+</dialog>
+<script>
+(function () {
+  const dialog = document.getElementById("reject-dialog");
+  const form = document.getElementById("reject-form");
+  const preview = document.getElementById("reject-preview");
+  const note = document.getElementById("reject-note");
+  const cancel = document.getElementById("reject-cancel");
+  if (!dialog || !form) return;
+
+  document.querySelectorAll(".js-reject-open").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const action = btn.getAttribute("data-action");
+      const previewId = btn.getAttribute("data-preview-id");
+      const draftInputId = btn.getAttribute("data-draft-input");
+      const source = previewId ? document.getElementById(previewId) : null;
+      const draftInput = draftInputId ? document.getElementById(draftInputId) : null;
+      form.setAttribute("action", action || "#");
+      note.value = "";
+      preview.innerHTML = "";
+      if (draftInput && draftInput.value.trim()) {
+        const pre = document.createElement("pre");
+        pre.className = "source-block";
+        pre.textContent = draftInput.value;
+        preview.appendChild(pre);
+      } else if (source) {
+        if (source.tagName === "PRE") {
+          const pre = document.createElement("pre");
+          pre.className = "source-block";
+          pre.textContent = source.textContent || "";
+          preview.appendChild(pre);
+        } else {
+          preview.innerHTML = source.innerHTML;
+        }
+      }
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    });
+  });
+
+  cancel.addEventListener("click", () => {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  });
+
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) {
+      if (typeof dialog.close === "function") dialog.close();
+      else dialog.removeAttribute("open");
+    }
+  });
+})();
+
+(function () {
+  document.querySelectorAll("form.js-llm-generate").forEach((form) => {
+    form.addEventListener("submit", () => {
+      form.querySelectorAll("button").forEach((btn) => {
+        btn.disabled = true;
+      });
+      const primary = form.querySelector('button[formaction*="/generate"]');
+      if (primary) primary.textContent = "Генерация… подождите";
+    });
+  });
+  // Disable only on submit — disabling the submit button on click cancels the POST.
+  document.querySelectorAll("button.js-llm-regen").forEach((btn) => {
+    const form = btn.closest("form");
+    if (!form) return;
+    form.addEventListener("submit", (event) => {
+      if (event.submitter !== btn) return;
+      form.querySelectorAll("button").forEach((b) => {
+        b.disabled = true;
+      });
+      btn.textContent = "Генерация… подождите";
+    });
+  });
+})();
+
+(function () {
+  document.querySelectorAll("[data-skills-picker]").forEach((picker) => {
+    const search = picker.querySelector(".skills-search");
+    const items = picker.querySelectorAll(".check[data-skill]");
+    if (!search || !items.length) return;
+    const apply = () => {
+      const q = (search.value || "").trim().toLowerCase();
+      items.forEach((item) => {
+        const title = item.getAttribute("data-skill") || "";
+        item.hidden = Boolean(q) && !title.includes(q);
+      });
+    };
+    search.addEventListener("input", apply);
+    search.addEventListener("search", apply);
+  });
+})();
+
+(function () {
+  const KEY = "lab21_notify_since_id";
+  let sinceId = Number(sessionStorage.getItem(KEY) || "0") || 0;
+  const show = (ev) => {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const n = new Notification(ev.title || "Lab21", {
+      body: ev.body || "",
+      tag: "lab21-" + ev.id,
+    });
+    if (ev.link) {
+      n.onclick = () => {
+        window.focus();
+        window.location.href = ev.link;
+        n.close();
+      };
+    }
+  };
+  const poll = async () => {
+    try {
+      const res = await fetch("/settings/notifications/feed?since_id=" + encodeURIComponent(sinceId), {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const events = data.events || [];
+      if (sinceId > 0) {
+        events.forEach(show);
+      }
+      if (typeof data.last_id === "number") {
+        sinceId = data.last_id;
+        sessionStorage.setItem(KEY, String(sinceId));
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  };
+  poll();
+  setInterval(poll, 15000);
+})();
+</script>
 {% else %}
   {% block body %}{% endblock %}
 {% endif %}

@@ -19,16 +19,14 @@ services:
     restart: unless-stopped
     volumes:
       - ollama_data:/root/.ollama
-    profiles: ["llm"]
 
   ollama-model:
     image: curlimages/curl:latest
-    profiles: ["llm"]
     depends_on:
       ollama:
         condition: service_started
     environment:
-      OLLAMA_MODEL: ${LLM_MODEL:-qwen3:4b}
+      OLLAMA_MODEL: ${LLM_MODEL:-lakomoor/vikhr-llama-3.2-1b-instruct:1b}
     command:
       - /bin/sh
       - -c
@@ -47,11 +45,15 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lab21}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lab21}
       CONTROL_DIR: /control
+      UPLOAD_DIR: /app/uploads
     volumes:
       - control_data:/control
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_started
 
   admin:
     build:
@@ -71,6 +73,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_started
 
   watchdog:
     build:

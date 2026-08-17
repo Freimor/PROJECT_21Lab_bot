@@ -1,0 +1,36 @@
+{% macro pub_tabs(section, can_settings, can_queue, badges=None) -%}
+<nav class="subnav">
+  {% if can_queue %}
+  <a href="/publications" class="{% if section == 'queue' %}active{% endif %}">
+    Очередь
+    {% if badges and badges.publications %}
+    <span class="nav-badge">+{{ badges.publications }}</span>
+    {% endif %}
+  </a>
+  {% endif %}
+  {% if can_settings %}
+  <a href="/publications/settings" class="{% if section == 'settings' %}active{% endif %}">Настройки</a>
+  <a href="/publications/teasers" class="{% if section == 'teasers' %}active{% endif %}">Тизеры</a>
+  {% endif %}
+  {% if can_queue or can_settings %}
+  <a href="/publications/memes" class="{% if section == 'memes' %}active{% endif %}">
+    Мемы
+    {% if badges and badges.memes %}
+    <span class="nav-badge">+{{ badges.memes }}</span>
+    {% endif %}
+  </a>
+  <a href="/publications/llm" class="{% if section.startswith('llm') %}active{% endif %}">Посты с LLM</a>
+  {% endif %}
+</nav>
+{%- endmacro %}
+
+{% macro llm_tabs(section, can_settings, can_queue) -%}
+<nav class="subnav" style="margin-top:-0.5rem">
+  {% if can_settings %}
+  <a href="/publications/llm/templates" class="{% if section == 'llm_templates' %}active{% endif %}">Шаблоны к LLM</a>
+  {% endif %}
+  {% if can_queue or can_settings %}
+  <a href="/publications/llm/journal" class="{% if section == 'llm_journal' %}active{% endif %}">Журнал постов</a>
+  {% endif %}
+</nav>
+{%- endmacro %}

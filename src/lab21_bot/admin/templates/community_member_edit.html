@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "community_nav.html" import community_tabs %}
+{% block title %}{{ member.full_name }} — Участники — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ member.full_name }}</h1>
+<p class="page-sub">
+  {% if member.username %}@{{ member.username }} · {% endif %}ID {{ member.telegram_id }}
+</p>
+{{ community_tabs('members', can_staff=true, can_economy=can_economy) }}
+<p><a href="/community/members">← К участникам</a></p>
+
+{% if pending_skills %}
+<div class="flash ok">
+  На валидации:
+  {% for sid in pending_skills %}
+  <span class="badge">{{ skill_titles.get(sid, sid) }}</span>
+  {% endfor %}
+  — см. <a href="/community/applications">Заявки</a>
+</div>
+{% endif %}
+
+<section class="panel" style="max-width:40rem">
+  <h2>Ранг и навыки</h2>
+  <form method="post" action="/community/members/{{ member.telegram_id }}/update" class="stack">
+    <label>Ранг
+      <select name="rank" required>
+        {% for item in ranks %}
+        <option value="{{ item.id }}" {% if member.rank|catalog_key == item.id %}selected{% endif %}>
+          {{ item.label }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <fieldset class="skills-picker" data-skills-picker>
+      <legend>Навыки</legend>
+      <input type="search" class="skills-search" placeholder="Поиск навыка…" autocomplete="off">
+      <div class="scroll-checklist">
+        {% set selected = member.skill_ids or [] %}
+        {% for skill in skills %}
+        <label class="check" data-skill="{{ skill.title|lower }}">
+          <span>
+            {{ skill.title }}
+            {% if skill.requires_validation %}<span class="muted">(валидация)</span>{% endif %}
+          </span>
+          <input type="checkbox" name="skill_ids" value="{{ skill.id }}"
+            {% if skill.id in selected or skill.id in pending_skills %}checked{% endif %}>
+        </label>
+        {% endfor %}
+      </div>
+      <p class="muted">Новые навыки с пометкой «валидация» уйдут в заявки, остальные применятся сразу.</p>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit">Сохранить</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

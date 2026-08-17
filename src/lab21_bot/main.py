@@ -77,9 +77,20 @@ async def main() -> None:
 
     from lab21_bot.services.commands import clear_default_commands
 
-    await clear_default_commands(bot)
+    try:
+        await clear_default_commands(bot)
+    except Exception as exc:
+        log.warning("clear_default_commands_failed", error=str(exc))
     scheduler.start()
     await notify_restart_result(bot, factory, settings)
+    from lab21_bot.services.quests import refresh_open_quest_posts
+
+    try:
+        async with factory.begin() as session:
+            refreshed = await refresh_open_quest_posts(bot, session, settings)
+        log.info("quest_posts_refreshed", count=refreshed)
+    except Exception as exc:
+        log.warning("quest_posts_refresh_failed", error=str(exc))
     log.info(
         "bot_started",
         model=settings.llm_model,

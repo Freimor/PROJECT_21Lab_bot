@@ -1,0 +1,20 @@
+{% macro community_tabs(section, can_staff=True, can_economy=False) -%}
+<nav class="subnav">
+  {% if can_staff %}
+  <a href="/community/applications" class="{% if section == 'applications' %}active{% endif %}">
+    Заявки
+    {% if badges and badges.has_joins %}
+    <span class="nav-badge">+{{ badges.join_staff }}|+{{ badges.join_community }}</span>
+    {% endif %}
+  </a>
+  <a href="/community/staff" class="{% if section == 'staff' %}active{% endif %}">Сотрудники</a>
+  {% endif %}
+  {% if can_staff or can_economy %}
+  <a href="/community/members" class="{% if section == 'members' %}active{% endif %}">Участники</a>
+  {% endif %}
+  {% if can_staff %}
+  <a href="/community/skills" class="{% if section == 'skills' %}active{% endif %}">Навыки</a>
+  <a href="/community/roles" class="{% if section == 'roles' %}active{% endif %}">Роли и ранги</a>
+  {% endif %}
+</nav>
+{%- endmacro %}

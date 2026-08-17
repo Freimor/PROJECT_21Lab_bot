@@ -15,10 +15,16 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY alembic ./alembic
 COPY alembic.ini ./
+COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
 
-RUN pip install .
+RUN pip install . \
+    && mkdir -p /app/uploads/products /app/uploads/quests \
+    && chown -R lab21:lab21 /app/uploads \
+    && sed -i 's/\r$//' /docker-entrypoint.sh \
+    && chmod +x /docker-entrypoint.sh
 
-USER lab21
+# Entrypoint starts as root to fix volume ownership, then drops to lab21.
+ENTRYPOINT ["/docker-entrypoint.sh"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD ["python", "-m", "lab21_bot.health"]

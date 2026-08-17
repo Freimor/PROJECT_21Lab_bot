@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — FAQ Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ title }}</h1>
+<p class="page-sub">Документация механик Lab21. Топики — в меню FAQ слева.</p>
+
+<div class="panel faq-article">
+  {{ body_html | safe }}
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "community_nav.html" import community_tabs %}
+{% block title %}{{ role.label }} — Роли — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ role.label }}</h1>
+<p class="page-sub">ID: {{ role.id }}</p>
+{{ community_tabs('roles', can_staff=true) }}
+<p><a href="/community/roles">← К ролям и рангам</a></p>
+
+<section class="panel" style="max-width:36rem">
+  <h2>Редактировать роль</h2>
+  <form method="post" action="/community/roles/{{ role.id }}/update" class="stack">
+    <label>Название <input name="label" required maxlength="200" value="{{ role.label }}"></label>
+    <label>Бейдж <input name="badge" maxlength="64" value="{{ role.badge }}"></label>
+    <label>Цвет <input name="color" type="color" value="{{ role.color }}"></label>
+    <label>Порядок <input type="number" name="sort_order" value="{{ role.sort_order }}"></label>
+    <label>Описание <textarea name="description" rows="3">{{ role.description }}</textarea></label>
+    <label class="check-row" style="flex-direction:row;align-items:center">
+      <input type="checkbox" name="is_unique" value="1" {% if role.is_unique %}checked{% endif %}>
+      Уникальная (один носитель)
+    </label>
+    <fieldset class="stack" style="border:0;padding:0;margin:0">
+      <legend class="muted" style="margin-bottom:0.35rem">Права</legend>
+      {% for perm in permission_choices %}
+      <label class="check-row" style="flex-direction:row;align-items:center">
+        <input type="checkbox" name="permissions" value="{{ perm.id }}"
+          {% if perm.id in role.permissions %}checked{% endif %}>
+        {{ perm.label }}
+      </label>
+      {% endfor %}
+    </fieldset>
+    <div class="actions">
+      <button type="submit">Сохранить</button>
+    </div>
+  </form>
+  <form method="post" action="/community/roles/{{ role.id }}/delete" style="margin-top:1rem" onsubmit="return confirm('Удалить роль «{{ role.label }}»?');">
+    <button type="submit" class="danger">Удалить роль</button>
+  </form>
+</section>
+{% endblock %}

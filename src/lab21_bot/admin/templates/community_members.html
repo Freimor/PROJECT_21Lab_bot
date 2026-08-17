@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% from "community_nav.html" import community_tabs %}
+{% block title %}Участники — Комьюнити — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Комьюнити</h1>
+<p class="page-sub">Участники сообщества, ранги и экономика.</p>
+{{ community_tabs('members', can_staff=can_staff, can_economy=can_economy) }}
+
+<div class="people-layout">
+  <div class="people-main">
+    <div class="panel">
+      <h2>Участники</h2>
+      <div class="filters-bar">
+        <div class="period-pills">
+          {% for key in period_keys %}
+          <a
+            class="{% if filter_period == key %}active{% endif %}"
+            href="/community/members?sort={{ filter_sort }}&dir={{ filter_dir }}&period={{ key }}"
+          >{{ period_labels[key] }}</a>
+          {% endfor %}
+        </div>
+      </div>
+      {% if period_limited %}
+      <p class="muted" style="margin:0 0 0.75rem">Благодать и респект за период — изменение по журналу операций.</p>
+      {% endif %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th></th><th>Имя</th><th>Username</th><th>ID</th>
+              <th>
+                <a
+                  class="col-sort {% if filter_sort == 'rank' %}active{% endif %}"
+                  href="/community/members?sort=rank&dir={{ 'desc' if filter_sort == 'rank' and filter_dir == 'asc' else 'asc' }}&period={{ filter_period }}"
+                >
+                  Ранг
+                  {% if filter_sort == 'rank' %}<span class="col-sort-dir">{{ '↑' if filter_dir == 'asc' else '↓' }}</span>{% endif %}
+                </a>
+              </th>
+              <th>
+                <a
+                  class="col-sort {% if filter_sort == 'grace' %}active{% endif %}"
+                  href="/community/members?sort=grace&dir={{ 'desc' if filter_sort == 'grace' and filter_dir == 'asc' else 'asc' }}&period={{ filter_period }}"
+                >
+                  Благодать
+                  {% if filter_sort == 'grace' %}<span class="col-sort-dir">{{ '↑' if filter_dir == 'asc' else '↓' }}</span>{% endif %}
+                </a>
+              </th>
+              <th>
+                <a
+                  class="col-sort {% if filter_sort == 'respect' %}active{% endif %}"
+                  href="/community/members?sort=respect&dir={{ 'desc' if filter_sort == 'respect' and filter_dir == 'asc' else 'asc' }}&period={{ filter_period }}"
+                >
+                  Респект
+                  {% if filter_sort == 'respect' %}<span class="col-sort-dir">{{ '↑' if filter_dir == 'asc' else '↓' }}</span>{% endif %}
+                </a>
+              </th>
+              <th>Навыки</th>
+              {% if can_economy %}<th>± Благодать</th><th>± Респект</th>{% endif %}
+              {% if can_staff %}<th></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in member_rows %}
+            {% set member = row.user %}
+            <tr>
+              <td>
+                {% if member.avatar_file_id %}
+                <img class="avatar" src="/avatar/{{ member.telegram_id }}" alt="">
+                {% else %}
+                <div class="avatar avatar-fallback">{{ member.full_name[:1] }}</div>
+                {% endif %}
+              </td>
+              <td>{{ member.full_name }}</td>
+              <td>{% if member.username %}@{{ member.username }}{% else %}—{% endif %}</td>
+              <td>{{ member.telegram_id }}</td>
+              <td>
+                <span class="badge badge-tint" style="--badge:{{ rank_colors.get(member.rank|catalog_key, '#a89878') }}">{{ rank_labels.get(member.rank|catalog_key, member.rank|catalog_key) }}</span>
+              </td>
+              <td>
+                {{ member.balance }}
+                {% if period_limited %}<span class="muted"> ({{ '%+d'|format(row.grace_delta) }})</span>{% endif %}
+              </td>
+              <td>
+                {{ member.respect }}
+                {% if period_limited %}<span class="muted"> ({{ '%+d'|format(row.respect_delta) }})</span>{% endif %}
+              </td>
+              <td>
+                {% if member.skill_ids %}
+                <div class="skill-chips">
+                  {% for sid in member.skill_ids %}
+                  <span class="badge">{{ skill_titles.get(sid, sid) }}</span>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <span class="muted">—</span>
+                {% endif %}
+              </td>
+              {% if can_economy %}
+              <td>
+                <form method="post" action="/community/{{ member.telegram_id }}/adjust" class="inline-edit">
+                  <input type="hidden" name="currency" value="grace">
+                  <input type="number" name="amount" min="1" required placeholder="сумма" style="width:5rem">
+                  <input name="reason" placeholder="причина" maxlength="500" style="width:7rem">
+                  <button type="submit" name="action" value="grant">+</button>
+                  <button type="submit" name="action" value="withdraw" class="danger">−</button>
+                </form>
+              </td>
+              <td>
+                <form method="post" action="/community/{{ member.telegram_id }}/adjust" class="inline-edit">
+                  <input type="hidden" name="currency" value="respect">
+                  <input type="number" name="amount" min="1" required placeholder="сумма" style="width:5rem">
+                  <input name="reason" placeholder="причина" maxlength="500" style="width:7rem">
+                  <button type="submit" name="action" value="grant">+</button>
+                  <button type="submit" name="action" value="withdraw" class="danger">−</button>
+                </form>
+              </td>
+              {% endif %}
+              {% if can_staff %}
+              <td class="actions" style="gap:0.35rem">
+                <a class="secondary" href="/community/members/{{ member.telegram_id }}">Изменить</a>
+                <a class="btn danger" href="/community/{{ member.telegram_id }}/remove">Удалить</a>
+              </td>
+              {% endif %}
+            </tr>
+            {% else %}
+            <tr><td colspan="13" class="muted">Участников пока нет</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <aside class="people-legend panel">
+    <h2>Ранги</h2>
+    <table class="legend-ranks">
+      <tbody>
+        {% for item in rank_legend %}
+        <tr>
+          <td><span class="badge badge-tint" style="--badge:{{ item.color }}">{{ item.label }}</span></td>
+          <td class="muted">ранг {{ item.level }} · база {{ item.base_grace }} · потолок {{ item.cap_grace }} бл.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if can_economy or can_staff %}
+    <h3 style="margin-top:1.25rem">Настройки благодати</h3>
+    <form method="post" action="/community/settings/grace-refill" class="form-grid" style="grid-template-columns:1fr">
+      <label>Ежедневное пополнение к базе (%)
+        <input type="number" name="grace_refill_percent" min="1" max="100"
+               value="{{ grace_refill_percent }}" required>
+      </label>
+      <p class="muted">Если баланс ниже базы ранга — раз в сутки начисляется этот % от базы.</p>
+      <label>Ежедневное снижение к потолку (%)
+        <input type="number" name="grace_decay_percent" min="1" max="100"
+               value="{{ grace_decay_percent }}" required>
+      </label>
+      <p class="muted">Если баланс выше потолка ранга — раз в сутки списывается этот % от потолка, пока не опустится до потолка.</p>
+      <div class="actions"><button type="submit">Сохранить</button></div>
+    </form>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% macro placeholder_legend(items, title='Конструкции', note='') -%}
+<aside class="token-legend" aria-label="{{ title }}">
+  <h3>{{ title }}</h3>
+  <ul class="legend-list">
+    {% for item in items %}
+    <li>
+      <div class="legend-title"><code>{{ item.token }}</code></div>
+      <div class="muted">{{ item.hint }}</div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if note %}<p class="muted legend-note">{{ note }}</p>{% endif %}
+</aside>
+{%- endmacro %}

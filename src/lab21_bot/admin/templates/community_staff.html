@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "community_nav.html" import community_tabs %}
+{% block title %}Сотрудники — Комьюнити — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Комьюнити</h1>
+<p class="page-sub">Сотрудники и назначение ролей.</p>
+{{ community_tabs('staff', can_staff=true) }}
+
+<div class="panel">
+  <h2>Изменить роль</h2>
+  <form method="post" action="/community/set-role" class="form-grid">
+    <label>Telegram ID или @username
+      <input name="target_query" required placeholder="123456 или @user">
+    </label>
+    <label>Роль
+      <select name="role">
+        {% for role in roles %}
+        <option value="{{ role }}">{{ role_labels.get(role, role) }}</option>
+        {% endfor %}
+        <option value="none">Снять роль</option>
+      </select>
+    </label>
+    <div class="actions" style="align-self:end"><button type="submit">Сохранить</button></div>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Сотрудники</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th></th><th>Имя</th><th>Username</th><th>ID</th><th>Роль</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for member in staff %}
+        <tr>
+          <td>
+            {% if member.avatar_file_id %}
+            <img class="avatar" src="/avatar/{{ member.telegram_id }}" alt="">
+            {% else %}
+            <div class="avatar avatar-fallback">{{ member.full_name[:1] }}</div>
+            {% endif %}
+          </td>
+          <td>{{ member.full_name }}</td>
+          <td>{% if member.username %}@{{ member.username }}{% else %}—{% endif %}</td>
+          <td>{{ member.telegram_id }}</td>
+          <td><span class="badge badge-tint" style="--badge:{{ role_colors.get(member.staff_role|catalog_key, '#6b7c93') }}">{{ role_labels.get(member.staff_role|catalog_key, member.staff_role|catalog_key) }}</span></td>
+          <td>
+            {% if member.telegram_id != user.telegram_id %}
+            <a class="btn secondary" href="/community/{{ member.telegram_id }}/remove">Удалить</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">Сотрудников пока нет</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<aside class="panel" style="max-width:28rem">
+  <h2>Легенда ролей</h2>
+  <ul class="legend-list">
+    {% for item in role_legend %}
+    <li>
+      <div class="legend-title">
+        <strong>{{ item.label }}</strong>
+        <span class="badge badge-tint" style="--badge:{{ item.color }}">{{ item.badge }}</span>
+      </div>
+      <div class="muted">{{ item.desc }}</div>
+    </li>
+    {% endfor %}
+  </ul>
+</aside>
+{% endblock %}

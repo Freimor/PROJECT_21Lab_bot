@@ -27,11 +27,11 @@ def commands_for_user(user: User) -> list[BotCommand]:
         if has_permission(user, Permission.MANAGE_ECONOMY):
             commands.extend(
                 [
-                    BotCommand(command="grant", description="Начислить благодать"),
-                    BotCommand(command="withdraw", description="Списать благодать"),
-                    BotCommand(command="respect_grant", description="Начислить респект"),
+                    BotCommand(command="grant", description="Начислить 🙏"),
+                    BotCommand(command="withdraw", description="Списать 🙏"),
+                    BotCommand(command="respect_grant", description="Начислить ❇"),
                     BotCommand(
-                        command="respect_withdraw", description="Списать респект"
+                        command="respect_withdraw", description="Списать ❇"
                     ),
                 ]
             )
@@ -54,10 +54,10 @@ def commands_for_user(user: User) -> list[BotCommand]:
         return commands
     return [
         BotCommand(command="menu", description="Главное меню"),
-        BotCommand(command="balance", description="Ранг, благодать и респект"),
-        BotCommand(command="history", description="История благодати"),
-        BotCommand(command="order", description="Сделать заказ"),
-        BotCommand(command="transfer", description="Передать благодать"),
+        BotCommand(command="balance", description="Ранг, 🙏 и ❇"),
+        BotCommand(command="history", description="История 🙏"),
+        BotCommand(command="order", description="Заказать услугу"),
+        BotCommand(command="transfer", description="Передать 🙏"),
     ]
 
 

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% from "community_nav.html" import community_tabs %}
+{% block title %}Навыки — Комьюнити — Lab21{% endblock %}
+{% block content %}
+<h1 class="page-title">Комьюнити</h1>
+<p class="page-sub">Каталог навыков: сортировка, редактирование, добавление и удаление.</p>
+{{ community_tabs('skills', can_staff=true) }}
+
+<div class="split-layout">
+  <section class="panel">
+    <h2>Добавить навык</h2>
+    <form method="post" action="/community/skills" class="stack">
+      <label>ID <input name="skill_id" required pattern="[a-z][a-z0-9_]{1,62}" placeholder="print_3d"></label>
+      <label>Название <input name="title" required maxlength="200"></label>
+      <label>Описание <textarea name="description" rows="3"></textarea></label>
+      <label>Ранг навыка <input type="number" name="level" min="1" value="1"></label>
+      <label>Благодать <input type="number" name="grace_price" min="0" value="40"></label>
+      <label>Респект <input type="number" name="respect_reward" min="0" value="4"></label>
+      <label class="check-row" style="flex-direction:row;align-items:center">
+        <input type="checkbox" name="requires_validation" value="1"> Требует валидации
+      </label>
+      <label>Как валидировать <textarea name="validation_description" rows="3"></textarea></label>
+      <button type="submit">Создать</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Каталог</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>
+              <a class="col-sort {% if filter_sort == 'title' %}active{% endif %}"
+                 href="/community/skills?sort=title&dir={{ 'desc' if filter_sort == 'title' and filter_dir == 'asc' else 'asc' }}">
+                Название{% if filter_sort == 'title' %} {{ '↑' if filter_dir == 'asc' else '↓' }}{% endif %}
+              </a>
+            </th>
+            <th>
+              <a class="col-sort {% if filter_sort == 'level' %}active{% endif %}"
+                 href="/community/skills?sort=level&dir={{ 'desc' if filter_sort == 'level' and filter_dir == 'asc' else 'asc' }}">
+                Ранг{% if filter_sort == 'level' %} {{ '↑' if filter_dir == 'asc' else '↓' }}{% endif %}
+              </a>
+            </th>
+            <th>
+              <a class="col-sort {% if filter_sort == 'grace' %}active{% endif %}"
+                 href="/community/skills?sort=grace&dir={{ 'desc' if filter_sort == 'grace' and filter_dir == 'asc' else 'asc' }}">
+                Благодать{% if filter_sort == 'grace' %} {{ '↑' if filter_dir == 'asc' else '↓' }}{% endif %}
+              </a>
+            </th>
+            <th>
+              <a class="col-sort {% if filter_sort == 'respect' %}active{% endif %}"
+                 href="/community/skills?sort=respect&dir={{ 'desc' if filter_sort == 'respect' and filter_dir == 'asc' else 'asc' }}">
+                Респект{% if filter_sort == 'respect' %} {{ '↑' if filter_dir == 'asc' else '↓' }}{% endif %}
+              </a>
+            </th>
+            <th>
+              <a class="col-sort {% if filter_sort == 'count' %}active{% endif %}"
+                 href="/community/skills?sort=count&dir={{ 'desc' if filter_sort == 'count' and filter_dir == 'asc' else 'asc' }}">
+                У участников{% if filter_sort == 'count' %} {{ '↑' if filter_dir == 'asc' else '↓' }}{% endif %}
+              </a>
+            </th>
+            <th>Валид.</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in skill_rows %}
+          {% set skill = row.skill %}
+          <tr>
+            <td>
+              <strong>{{ skill.title }}</strong>
+              <div class="muted">{{ skill.id }}</div>
+            </td>
+            <td>{{ skill.level }}</td>
+            <td>{{ skill.grace_price }}</td>
+            <td>{{ skill.respect_reward }}</td>
+            <td>{{ row.member_count }}</td>
+            <td>{% if skill.requires_validation %}да{% else %}—{% endif %}</td>
+            <td class="actions" style="gap:0.35rem">
+              <a class="secondary" href="/community/skills/{{ skill.id }}">Редактировать</a>
+              <form method="post" action="/community/skills/{{ skill.id }}/delete" onsubmit="return confirm('Удалить навык «{{ skill.title }}»?');">
+                <button type="submit" class="danger">Удалить</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="muted">Навыков пока нет</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

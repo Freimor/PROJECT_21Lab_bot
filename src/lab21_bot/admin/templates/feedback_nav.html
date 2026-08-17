@@ -1,0 +1,12 @@
+{% macro feedback_tabs(section, pending_bugs=0, pending_upgrades=0) -%}
+<nav class="subnav">
+  <a href="/feedback/bugs" class="{% if section == 'bugs' %}active{% endif %}">
+    Баги
+    {% if pending_bugs %}<span class="nav-badge">+{{ pending_bugs }}</span>{% endif %}
+  </a>
+  <a href="/feedback/upgrades" class="{% if section == 'upgrades' %}active{% endif %}">
+    Предложения
+    {% if pending_upgrades %}<span class="nav-badge">+{{ pending_upgrades }}</span>{% endif %}
+  </a>
+</nav>
+{%- endmacro %}

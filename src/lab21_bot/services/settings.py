@@ -2,14 +2,11 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from lab21_bot.data import setting_ranges
 from lab21_bot.models import AdminAction, BotSetting, User
 from lab21_bot.services.access import Permission, require_permission
 
-INTEGER_SETTINGS: dict[str, tuple[int, int]] = {
-    "content_silence_days": (1, 90),
-    "reminder_hour": (0, 23),
-    "transfer_daily_limit": (0, 1_000_000),
-}
+INTEGER_SETTINGS: dict[str, tuple[int, int]] = setting_ranges()
 
 
 class SettingError(RuntimeError):
@@ -26,6 +23,20 @@ async def get_int_setting(
         return default
     value = setting.value.get("value")
     return int(value) if isinstance(value, int) else default
+
+
+async def get_float_setting(
+    session: AsyncSession,
+    key: str,
+    default: float,
+) -> float:
+    setting = await session.get(BotSetting, key)
+    if setting is None:
+        return default
+    value = setting.value.get("value")
+    if isinstance(value, (int, float)):
+        return float(value)
+    return default
 
 
 async def set_int_setting(
@@ -56,3 +67,4 @@ async def set_int_setting(
     )
     await session.flush()
     return setting
+
