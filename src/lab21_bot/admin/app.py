@@ -13,9 +13,12 @@ from starlette.middleware.sessions import SessionMiddleware
 from lab21_bot.admin.routes import api_router
 from lab21_bot.config import Settings, get_settings
 from lab21_bot.db import bootstrap_database, create_engine, create_session_factory
+from lab21_bot.miniapp.router import router as miniapp_router
+from lab21_bot.telegram_client import proxy_urls, select_proxy
 
 logger = structlog.get_logger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+WEBAPP_DIR = Path(__file__).resolve().parents[1] / "miniapp" / "static"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -29,6 +32,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = settings
         app.state.engine = engine
         app.state.session_factory = factory
+        if proxy_urls(settings):
+            try:
+                await select_proxy(settings)
+            except Exception as exc:
+                logger.warning("telegram_proxy_select_failed", error=str(exc))
         logger.info("admin_started", host=settings.admin_host, port=settings.admin_port)
         try:
             yield
@@ -49,6 +57,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.mount("/uploads", StaticFiles(directory=str(upload_root)), name="uploads")
+    if settings.miniapp_enabled:
+        app.include_router(miniapp_router, prefix="/api/miniapp")
+        if WEBAPP_DIR.is_dir():
+            app.mount(
+                "/app",
+                StaticFiles(directory=str(WEBAPP_DIR), html=True),
+                name="miniapp",
+            )
+        else:
+            logger.warning("miniapp_dist_missing", path=str(WEBAPP_DIR))
     app.include_router(api_router)
     return app
 

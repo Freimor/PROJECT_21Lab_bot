@@ -17,6 +17,7 @@ from lab21_bot.llm.client import LLMClient
 from lab21_bot.models import BotSetting
 from lab21_bot.scheduler import create_scheduler
 from lab21_bot.services.lifecycle import LAST_RESTART_SETTING, consume_restart_result
+from lab21_bot.telegram_client import create_bot_with_failover, proxy_urls
 
 
 def configure_logging(level: str) -> None:
@@ -69,7 +70,7 @@ async def main() -> None:
     factory = create_session_factory(engine)
     await bootstrap_database(engine, factory, settings)
 
-    bot = Bot(settings.telegram_bot_token.get_secret_value())
+    bot = await create_bot_with_failover(settings)
     llm = LLMClient(settings)
     dispatcher = Dispatcher(storage=MemoryStorage())
     dispatcher.include_router(create_router(settings, factory, llm))
@@ -96,6 +97,7 @@ async def main() -> None:
         model=settings.llm_model,
         provider=settings.llm_provider,
         git_sha=settings.app_git_sha,
+        telegram_proxies=len(proxy_urls(settings)),
     )
     try:
         await dispatcher.start_polling(bot)

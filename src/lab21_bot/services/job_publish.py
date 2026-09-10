@@ -6,6 +6,7 @@ from html import escape
 from typing import Any
 
 from aiogram import Bot
+from aiogram.types import InlineKeyboardMarkup
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -169,6 +170,13 @@ async def notify_job_subscribers(
     )
     for user in targets:
         try:
-            await bot.send_message(user.telegram_id, text)
+            from lab21_bot.keyboards import miniapp_button
+
+            markup = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [miniapp_button("Открыть заказ", f"jobs/{job.id}", settings)]
+                ]
+            )
+            await bot.send_message(user.telegram_id, text, reply_markup=markup)
         except (TelegramBadRequest, TelegramForbiddenError):
             continue

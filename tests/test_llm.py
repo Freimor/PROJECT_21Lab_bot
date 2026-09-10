@@ -46,3 +46,51 @@ async def test_openai_compatible_adapter() -> None:
         assert await client.generate_staff_post("Напечатали корпус") == "Черновик vLLM"
     finally:
         await client.close()
+
+
+async def test_openvino_adapter_uses_backend(monkeypatch) -> None:
+    from lab21_bot.llm import openvino_backend
+
+    calls: list[object] = []
+
+    def fake_generate(req: openvino_backend.OpenVinoGenerateRequest) -> str:
+        calls.append(req)
+        assert req.device == "NPU"
+        assert req.model_path.endswith("Qwen3.5-9B-int4-ov")
+        assert req.max_new_tokens == 256
+        return "<b>Черновик NPU</b>"
+
+    monkeypatch.setattr(openvino_backend, "generate_sync", fake_generate)
+
+    cfg = Settings(
+        telegram_bot_token="token",
+        bootstrap_magister_id=1,
+        main_channel_id=-1001,
+        staff_chat_id=-1002,
+        llm_provider="openvino",
+        llm_model=r"C:\models\Qwen3.5-9B-int4-ov",
+        llm_device="NPU",
+        llm_timeout_seconds=600,
+        llm_max_new_tokens=256,
+    )
+    client = LLMClient(cfg)
+    try:
+        assert await client.generate_staff_post("Починили блок питания") == "<b>Черновик NPU</b>"
+        assert len(calls) == 1
+        assert calls[0].model_path.endswith("Qwen3.5-9B-int4-ov")
+    finally:
+        await client.close()
+
+
+def test_llm_provider_accepts_openvino() -> None:
+    cfg = Settings(
+        telegram_bot_token="token",
+        bootstrap_magister_id=1,
+        main_channel_id=-1001,
+        staff_chat_id=-1002,
+        llm_provider="openvino",
+        llm_model="/models/qwen",
+        llm_device="npu",
+    )
+    assert cfg.llm_provider == "openvino"
+    assert cfg.llm_device == "NPU"

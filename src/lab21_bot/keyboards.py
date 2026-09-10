@@ -1,5 +1,6 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
+from lab21_bot.config import Settings, get_settings
 from lab21_bot.data import list_skills, role_labels
 from lab21_bot.models import (
     ContentItem,
@@ -14,6 +15,25 @@ from lab21_bot.services.access import Permission, has_permission
 
 _ROLE_LABELS = role_labels()
 ROLE_LABELS = {role: _ROLE_LABELS[role.value] for role in StaffRole}
+
+
+def start_keyboard(settings: Settings | None = None) -> InlineKeyboardMarkup:
+    settings = settings or get_settings()
+    base = settings.miniapp_base_url.rstrip("/")
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Открыть Lab21", web_app=WebAppInfo(url=base))],
+            [InlineKeyboardButton(text="FAQ", web_app=WebAppInfo(url=f"{base}#/faq"))],
+        ]
+    )
+
+
+def miniapp_button(text: str, fragment: str = "", settings: Settings | None = None) -> InlineKeyboardButton:
+    settings = settings or get_settings()
+    base = settings.miniapp_base_url.rstrip("/")
+    fragment = fragment.lstrip("#/")
+    url = f"{base}#/{fragment}" if fragment else base
+    return InlineKeyboardButton(text=text, web_app=WebAppInfo(url=url))
 
 
 def onboarding_keyboard() -> InlineKeyboardMarkup:
@@ -223,16 +243,17 @@ def job_board_keyboard(job_id: int, status: ServiceJobStatus | str) -> InlineKey
     )
 
 
-def shop_card_keyboard(product: Product) -> InlineKeyboardMarkup:
+def shop_card_keyboard(product: Product, settings: Settings | None = None) -> InlineKeyboardMarkup:
     available = product.is_visible and (product.stock is None or int(product.stock) > 0)
     if available:
-        text, data = "Заказать", f"shop_buy:{product.id}"
-    elif not product.is_visible:
-        text, data = "Снято с витрины", f"shop_soldout:{product.id}"
-    else:
-        text, data = "Нет в наличии", f"shop_soldout:{product.id}"
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [miniapp_button("Открыть в приложении", f"shop", settings)],
+            ]
+        )
+    text = "Снято с витрины" if not product.is_visible else "Нет в наличии"
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=text, callback_data=data)]]
+        inline_keyboard=[[InlineKeyboardButton(text=text, callback_data=f"shop_soldout:{product.id}")]]
     )
 
 

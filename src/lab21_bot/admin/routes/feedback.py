@@ -130,19 +130,20 @@ async def feedback_media(
 
 
 async def _set_reaction(settings, chat_id: int, message_id: int, emoji: str) -> None:
-    import httpx
+    from lab21_bot.telegram_client import telegram_api_post
 
     token = settings.telegram_bot_token.get_secret_value()
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            await client.post(
-                f"https://api.telegram.org/bot{token}/setMessageReaction",
-                json={
-                    "chat_id": chat_id,
-                    "message_id": message_id,
-                    "reaction": [{"type": "emoji", "emoji": emoji}],
-                },
-            )
+        await telegram_api_post(
+            token,
+            "setMessageReaction",
+            {
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "reaction": [{"type": "emoji", "emoji": emoji}],
+            },
+            request_timeout=20.0,
+        )
     except Exception:
         pass
 

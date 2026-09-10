@@ -111,13 +111,13 @@ async def llm_settings_page(
     runtime = await get_llm_runtime(session, settings)
     client = LLMClient(settings)
     models: list[str] = []
-    ollama_ok = False
+    llm_ok = False
     try:
-        ollama_ok = await client.ping()
-        if ollama_ok:
+        llm_ok = await client.ping()
+        if llm_ok:
             models = await client.list_models()
     except LLMError:
-        ollama_ok = False
+        llm_ok = False
     finally:
         await client.close()
     return await render(
@@ -128,7 +128,9 @@ async def llm_settings_page(
         settings_section="llm",
         runtime=runtime,
         models=models,
-        ollama_ok=ollama_ok,
+        llm_ok=llm_ok,
+        llm_provider=settings.llm_provider,
+        llm_device=settings.llm_device,
         llm_base_url=settings.llm_base_url,
         command_legend=LLM_COMMAND_LEGEND,
     )

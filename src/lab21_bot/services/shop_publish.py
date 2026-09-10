@@ -17,6 +17,7 @@ from lab21_bot.data import rank_label, skill_title
 from lab21_bot.keyboards import shop_card_keyboard
 from lab21_bot.models import Product, ProductKind
 from lab21_bot.services.destinations import Destination, shop_destination
+from lab21_bot.telegram_client import create_bot
 
 logger = structlog.get_logger(__name__)
 
@@ -228,7 +229,7 @@ async def sync_shop_card(
     if dest is None:
         return
     html = format_shop_card_html(product)
-    markup = shop_card_keyboard(product)
+    markup = shop_card_keyboard(product, settings)
     chat_id = product.shop_chat_id
     message_id = product.shop_message_id
     has_existing = bool(chat_id and message_id)
@@ -276,7 +277,7 @@ async def sync_shop_card_from_settings(
 ) -> None:
     if shop_destination(settings) is None:
         return
-    bot = Bot(settings.telegram_bot_token.get_secret_value())
+    bot = create_bot(settings)
     try:
         await sync_shop_card(
             bot,
@@ -290,7 +291,7 @@ async def sync_shop_card_from_settings(
 
 
 async def remove_shop_card_from_settings(settings: Any, product: Product) -> None:
-    bot = Bot(settings.telegram_bot_token.get_secret_value())
+    bot = create_bot(settings)
     try:
         await _delete_shop_message(bot, product)
     finally:

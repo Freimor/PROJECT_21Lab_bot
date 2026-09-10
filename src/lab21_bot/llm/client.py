@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
@@ -64,6 +65,26 @@ class LLMClient:
         )
 
     async def ping(self) -> bool:
+        if self.settings.llm_provider == "openvino":
+            from lab21_bot.llm.openvino_backend import ping_sync
+
+            try:
+                return await asyncio.to_thread(
+                    ping_sync,
+                    self.settings.llm_model,
+                    self.settings.llm_device,
+                )
+            except Exception:
+                return False
+        if self.settings.llm_provider == "openai":
+            try:
+                response = await self._client.get(
+                    f"{self.settings.llm_base_url.rstrip('/')}/v1/models",
+                    timeout=5.0,
+                )
+                return response.status_code < 500
+            except httpx.HTTPError:
+                return False
         try:
             response = await self._client.get(
                 f"{self.settings.llm_base_url.rstrip('/')}/api/tags",
@@ -75,6 +96,29 @@ class LLMClient:
             return False
 
     async def list_models(self) -> list[str]:
+        if self.settings.llm_provider == "openvino":
+            return [self.settings.llm_model]
+        if self.settings.llm_provider == "openai":
+            try:
+                headers: dict[str, str] = {}
+                if self.settings.llm_api_key:
+                    headers["Authorization"] = (
+                        f"Bearer {self.settings.llm_api_key.get_secret_value()}"
+                    )
+                response = await self._client.get(
+                    f"{self.settings.llm_base_url.rstrip('/')}/v1/models",
+                    headers=headers,
+                    timeout=10.0,
+                )
+                response.raise_for_status()
+                payload = response.json()
+            except (httpx.HTTPError, ValueError, TypeError) as error:
+                raise LLMError("Не удалось получить список моделей LLM") from error
+            models: list[str] = []
+            for item in payload.get("data") or []:
+                if isinstance(item, dict) and item.get("id"):
+                    models.append(str(item["id"]))
+            return sorted(set(models)) or [self.settings.llm_model]
         try:
             response = await self._client.get(
                 f"{self.settings.llm_base_url.rstrip('/')}/api/tags",
@@ -84,7 +128,7 @@ class LLMClient:
             payload = response.json()
         except (httpx.HTTPError, ValueError, TypeError) as error:
             raise LLMError("Не удалось получить список моделей Ollama") from error
-        models: list[str] = []
+        models = []
         for item in payload.get("models") or []:
             if not isinstance(item, dict):
                 continue
@@ -118,7 +162,38 @@ class LLMClient:
             )
         if self.settings.llm_provider == "ollama":
             return await self._ollama(prompt, cfg)
+        if self.settings.llm_provider == "openvino":
+            return await self._openvino(prompt, cfg)
         return await self._openai(prompt, cfg)
+
+    async def _openvino(self, prompt: str, runtime: LlmRuntime) -> str:
+        from lab21_bot.llm.openvino_backend import OpenVinoGenerateRequest, generate_sync
+
+        req = OpenVinoGenerateRequest(
+            system=system_prompt(runtime.prompts),
+            user=prompt,
+            model_path=runtime.model,
+            device=self.settings.llm_device,
+            temperature=runtime.temperature,
+            max_new_tokens=self.settings.llm_max_new_tokens,
+        )
+        try:
+            text = await asyncio.wait_for(
+                asyncio.to_thread(generate_sync, req),
+                timeout=runtime.timeout_seconds,
+            )
+        except TimeoutError as error:
+            raise LLMError(
+                f"OpenVINO ({self.settings.llm_device}) не успел ответить за "
+                f"{runtime.timeout_seconds:.0f} с — увеличьте таймаут в настройках LLM"
+            ) from error
+        except Exception as error:
+            raise LLMError(f"OpenVINO ошибка: {error}") from error
+        text = strip_llm_fences(text)
+        text = normalize_telegram_html(text)
+        if not text:
+            raise LLMError("Локальная LLM вернула пустой ответ")
+        return text
 
     async def _ollama(self, prompt: str, runtime: LlmRuntime) -> str:
         try:
@@ -172,9 +247,14 @@ class LLMClient:
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": runtime.temperature,
+                    "max_tokens": self.settings.llm_max_new_tokens,
                 },
                 timeout=runtime.timeout_seconds,
             )
+        except httpx.TimeoutException as error:
+            raise LLMError(
+                f"LLM не успела ответить за {runtime.timeout_seconds:.0f} с"
+            ) from error
         except httpx.HTTPError as error:
             raise LLMError("LLM недоступна") from error
         return self._extract(response, ("choices", 0, "message", "content"))

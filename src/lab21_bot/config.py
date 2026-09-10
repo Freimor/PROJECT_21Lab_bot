@@ -19,6 +19,9 @@ class Settings(BaseSettings):
 
     telegram_bot_token: SecretStr
     bootstrap_magister_id: int
+    # Outbound path to api.telegram.org (SOCKS5/HTTP). Comma-separated list = failover order.
+    telegram_proxy: str | None = None
+    telegram_proxies: str = ""
     database_url: str = "postgresql+asyncpg://lab21:lab21@postgres:5432/lab21"
     main_channel_id: int  # Форум-группа или канал «Будни лабы»
     staff_chat_id: int
@@ -33,6 +36,9 @@ class Settings(BaseSettings):
     llm_model: str = "lakomoor/vikhr-llama-3.2-1b-instruct:1b"
     llm_api_key: SecretStr | None = None
     llm_timeout_seconds: float = 120.0
+    # openvino only: NPU | CPU | GPU — path in llm_model is OpenVINO IR directory
+    llm_device: str = "NPU"
+    llm_max_new_tokens: int = Field(default=1024, ge=16, le=8192)
 
     timezone: str = "Europe/Moscow"
     # Forum topics: MAIN/IMPORTANT/FLOOD may share one chat_id; distinguish by thread_id.
@@ -70,12 +76,23 @@ class Settings(BaseSettings):
     admin_password: SecretStr | None = None
     telegram_bot_username: str | None = None
 
+    miniapp_enabled: bool = True
+    miniapp_base_url: str = "http://localhost:8080/app"
+
     @field_validator("llm_provider")
     @classmethod
     def validate_provider(cls, value: str) -> str:
         normalized = value.lower()
-        if normalized not in {"ollama", "openai"}:
-            raise ValueError("llm_provider must be 'ollama' or 'openai'")
+        if normalized not in {"ollama", "openai", "openvino"}:
+            raise ValueError("llm_provider must be 'ollama', 'openai', or 'openvino'")
+        return normalized
+
+    @field_validator("llm_device")
+    @classmethod
+    def validate_device(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized not in {"NPU", "CPU", "GPU"}:
+            raise ValueError("llm_device must be 'NPU', 'CPU', or 'GPU'")
         return normalized
 
     @field_validator(
@@ -99,7 +116,7 @@ class Settings(BaseSettings):
             return None
         return value
 
-    @field_validator("telegram_bot_username", mode="before")
+    @field_validator("telegram_bot_username", "telegram_proxy", mode="before")
     @classmethod
     def empty_optional_str(cls, value: object) -> object:
         if value == "":

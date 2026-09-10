@@ -3,20 +3,22 @@
 {% block title %}Настройки LLM — Lab21{% endblock %}
 {% block content %}
 <h1 class="page-title">Настройки</h1>
-<p class="page-sub">Модель Ollama, температура и директивы в промпте.</p>
+<p class="page-sub">Провайдер задаётся в .env (<code>LLM_PROVIDER</code>): ollama / openvino / openai.</p>
 {{ settings_tabs(settings_section) }}
 
 <div class="settings-layout" style="margin-top:1rem">
   <div class="panel">
     <p class="muted" style="margin-top:0">
-      Ollama:
-      {% if ollama_ok %}
+      LLM (<code>{{ llm_provider }}</code>{% if llm_provider == 'openvino' %} · {{ llm_device }}{% endif %}):
+      {% if llm_ok %}
         <span style="color:var(--ok, #2a7)">доступна</span>
       {% else %}
         <span style="color:var(--danger, #c33)">недоступна</span>
         — заявки уйдут в очередь без оформления.
       {% endif %}
+      {% if llm_provider != 'openvino' %}
       · {{ llm_base_url }}
+      {% endif %}
     </p>
     <form method="post" action="/settings/llm" class="form-grid">
       <label>Модель
@@ -30,8 +32,15 @@
           {% endif %}
         </select>
         {% else %}
-        <input name="model" value="{{ runtime.model }}" required placeholder="qwen3:4b">
-        <span class="muted">Список моделей недоступен — введите имя вручную</span>
+        <input name="model" value="{{ runtime.model }}" required
+               placeholder="{% if llm_provider == 'openvino' %}C:\models\Qwen3.5-9B-int4-ov{% else %}qwen3:4b{% endif %}">
+        <span class="muted">
+          {% if llm_provider == 'openvino' %}
+          Путь к каталогу OpenVINO IR на хосте
+          {% else %}
+          Список моделей недоступен — введите имя вручную
+          {% endif %}
+        </span>
         {% endif %}
       </label>
       <label>Температура (0–2)
@@ -43,8 +52,9 @@
                value="{{ runtime.timeout_seconds|int }}" required>
       </label>
       <p class="muted" style="grid-column:1/-1;margin:0">
-        На CPU генерация поста может занимать 5–20+ минут. Для qwen3.5:4b без GPU
-        ставьте таймаут ≥ 600–1200 с и директиву <code>/no_think</code>.
+        На CPU / NPU генерация поста может занимать минуты. Для qwen3.5:9b
+        ставьте таймаут ≥ 600–1800 с и директиву <code>/no_think</code>.
+        Переключение ollama ↔ openvino — только через <code>.env</code> и рестарт.
       </p>
       <label style="grid-column:1/-1">Команды / директивы (добавляются в конец user-промпта)
         <input name="command_suffix" value="{{ runtime.command_suffix }}"

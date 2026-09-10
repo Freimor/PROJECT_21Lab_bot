@@ -75,10 +75,13 @@ def create_scheduler(
             expired = await expire_pending_applications(session)
         for application in expired:
             try:
+                from lab21_bot.keyboards import start_keyboard
+
                 await bot.send_message(
                     application.user_id,
                     "Заявка на вступление отклонена автоматически: "
                     "неделя ожидания истекла без решения администратора.",
+                    reply_markup=start_keyboard(settings),
                 )
             except (TelegramBadRequest, TelegramForbiddenError):
                 pass

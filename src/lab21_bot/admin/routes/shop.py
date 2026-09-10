@@ -37,6 +37,7 @@ from lab21_bot.services.store import (
 from lab21_bot.services.notify import notify_telegram_user
 from lab21_bot.services.uploads import UploadError, save_product_image
 from lab21_bot.services.user_messages import message_order_cancelled, message_order_fulfilled
+from lab21_bot.telegram_client import create_bot
 
 router = APIRouter(tags=["shop"])
 
@@ -347,9 +348,7 @@ async def shop_job_done(
     try:
         job = await mark_job_done(session, actor, job_id)
         customer = await session.get(User, job.customer_id)
-        from aiogram import Bot
-
-        bot = Bot(settings.telegram_bot_token.get_secret_value())
+        bot = create_bot(settings)
         try:
             await sync_job_board_post(bot, job, customer, update_text=True)
         finally:
@@ -379,9 +378,7 @@ async def shop_job_cancel(
 ) -> RedirectResponse:
     try:
         job = await cancel_job(session, actor, job_id)
-        from aiogram import Bot
-
-        bot = Bot(settings.telegram_bot_token.get_secret_value())
+        bot = create_bot(settings)
         try:
             await sync_job_board_post(bot, job)
         finally:

@@ -6,6 +6,24 @@
 
 Дефолтные промпты: `data/llm_prompts.json`. Переопределения в БД — админка **Публикации → Посты с LLM → Шаблоны**. В user-шаблонах обязателен `{source}` — туда подставляется исходник заметки, интервью или отчёта. Модель и таймаут — **Настройки → Настройки LLM**. После обновления дефолтов в файле имеет смысл сверить/пересохранить шаблоны в админке.
 
+## Бэкенды (`LLM_PROVIDER`)
+
+| Provider | Когда | Как переключить |
+|----------|--------|-----------------|
+| `ollama` | Рабочий CPU-flow в Compose | `COMPOSE_PROFILES=ollama`, `LLM_BASE_URL=http://ollama:11434` |
+| `openvino` | Бот на хосте с Intel NPU | `LLM_MODEL=<путь к IR>`, `LLM_DEVICE=NPU` |
+| `openai` | Docker-бот → NPU-сервер на хосте / vLLM | `LLM_BASE_URL=http://host.docker.internal:8091` |
+
+Ollama-сервисы в `docker-compose.yml` включены только с профилем `ollama`. Intel GPU с текущей Ollama в Docker обычно недоступен — для ускорения на вашем ПК используйте NPU через OpenVINO.
+
+Скачать IR и поднять хост-сервер:
+
+```powershell
+pip install "lab21-bot[openvino]" huggingface_hub uvicorn
+python scripts/download_openvino_llm.py
+python scripts/run_openvino_llm_server.py --model models/Qwen3.5-9B-int4-ov --preload
+```
+
 ## Директивы
 
 - `/no_think` — быстрее, без цепочки рассуждений (рекомендуется).
@@ -14,4 +32,4 @@
 
 ## Производительность
 
-На CPU большие модели могут генерировать пост десятки минут. Поднимайте таймаут (до 1800 с) или запускайте Ollama на GPU / нативно на Windows (для Intel Arc — не через Docker NVIDIA passthrough).
+На CPU большие модели могут генерировать пост десятки минут. Поднимайте таймаут (до 1800 с). Для NPU (qwen3.5 9B) типичный пост обычно укладывается в несколько минут; первая компиляция модели на NPU может быть долгой — используйте `--preload` у сервера.

@@ -606,9 +606,9 @@ async def publications_meme_approve(
         await notify_telegram_user(token, item.author_id, message_meme_approved())
         try:
             from lab21_bot.services.flavor import maybe_send_flavor
-            from aiogram import Bot
+            from lab21_bot.telegram_client import create_bot
 
-            bot = Bot(token)
+            bot = create_bot(settings)
             try:
                 await maybe_send_flavor(
                     bot,

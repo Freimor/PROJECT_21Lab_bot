@@ -16,12 +16,14 @@ services:
 
   ollama:
     image: ollama/ollama:latest
+    profiles: ["ollama"]
     restart: unless-stopped
     volumes:
       - ollama_data:/root/.ollama
 
   ollama-model:
     image: curlimages/curl:latest
+    profiles: ["ollama"]
     depends_on:
       ollama:
         condition: service_started
@@ -46,14 +48,55 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lab21}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lab21}
       CONTROL_DIR: /control
       UPLOAD_DIR: /app/uploads
+      TELEGRAM_PROXIES: ${TELEGRAM_PROXIES:-}
     volumes:
       - control_data:/control
       - uploads_data:/app/uploads
+      # Optional: mount OpenVINO IR when LLM_PROVIDER=openvino inside a Linux host with NPU
+      - ${OPENVINO_MODEL_DIR:-./models}:/models:ro
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
+
+  # Optional AmneziaWG exits for Telegram API (profile: amnezia).
+  # Put client .conf files into secrets/amnezia-a and secrets/amnezia-b.
+  # Then: COMPOSE_PROFILES=ollama,amnezia  (or amnezia alone)
+  # TELEGRAM_PROXIES=socks5://amnezia-a:1080,socks5://amnezia-b:1080
+  amnezia-a:
+    profiles: ["amnezia"]
+    image: ghcr.io/mainfrezzer/amnezia-bridge:latest
+    container_name: lab21-amnezia-a
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - ./secrets/amnezia-a:/etc/amnezia/amneziawg:ro
+    environment:
+      LAN_NETWORK: ${AMNEZIA_LAN_NETWORK:-192.168.0.0/16}
+      ENABLE_RANDOM: ${AMNEZIA_ENABLE_RANDOM:-1}
+      HEALTH_URL_CHECK: ${AMNEZIA_HEALTH_URL:-1.1.1.1}
+
+  amnezia-b:
+    profiles: ["amnezia"]
+    image: ghcr.io/mainfrezzer/amnezia-bridge:latest
+    container_name: lab21-amnezia-b
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - ./secrets/amnezia-b:/etc/amnezia/amneziawg:ro
+    environment:
+      LAN_NETWORK: ${AMNEZIA_LAN_NETWORK:-192.168.0.0/16}
+      ENABLE_RANDOM: ${AMNEZIA_ENABLE_RANDOM:-1}
+      HEALTH_URL_CHECK: ${AMNEZIA_HEALTH_URL:-1.1.1.1}
 
   admin:
     build:
@@ -73,8 +116,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
 
   watchdog:
     build:

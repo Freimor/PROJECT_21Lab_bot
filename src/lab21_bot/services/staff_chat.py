@@ -8,24 +8,16 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
 import structlog
 
 from lab21_bot.data import phrase
+from lab21_bot.telegram_client import telegram_api_post
 
 logger = structlog.get_logger(__name__)
 
-TELEGRAM_API = "https://api.telegram.org"
-
 
 async def _post(bot_token: str, method: str, payload: dict[str, Any]) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{TELEGRAM_API}/bot{bot_token}/{method}",
-            json=payload,
-        )
-        data: dict[str, Any] = response.json()
-        return data
+    return await telegram_api_post(bot_token, method, payload, request_timeout=30.0)
 
 
 async def create_staff_invite_link(

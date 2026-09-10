@@ -45,6 +45,7 @@ from lab21_bot.keyboards import (
     my_jobs_keyboard,
     my_quests_keyboard,
     onboarding_keyboard,
+    start_keyboard,
     order_actions,
     profile_menu_keyboard,
     profile_skills_keyboard,
@@ -518,6 +519,64 @@ def create_router(
     router.message.middleware(DeleteCommandMessageMiddleware())
     albums = AlbumCollector()
 
+    _APP_REDIRECT_COMMANDS = {
+        "menu",
+        "balance",
+        "history",
+        "order",
+        "transfer",
+        "card",
+        "bow",
+        "bless",
+        "staff",
+        "post",
+        "grant",
+        "withdraw",
+        "respect_grant",
+        "respect_withdraw",
+        "setting",
+        "reboot",
+        "update_status",
+        "product",
+        "product_edit",
+    }
+
+    async def _send_app_prompt(chat_id: int, bot: Bot, *, fragment: str = "") -> None:
+        await bot.send_message(
+            chat_id,
+            "Это действие доступно в приложении Lab21.",
+            reply_markup=start_keyboard(settings),
+        )
+
+    @router.message(Command(*sorted(_APP_REDIRECT_COMMANDS)), F.chat.type == "private")
+    async def redirect_private_commands(message: Message, bot: Bot) -> None:
+        if not message.from_user:
+            return
+        await delete_quietly(message)
+        await _send_app_prompt(message.from_user.id, bot)
+
+    @router.callback_query(F.data.startswith("menu:"))
+    @router.callback_query(F.data.startswith("staff:"))
+    @router.callback_query(F.data.startswith("shop_buy:"))
+    @router.callback_query(F.data.startswith("shop_qty:"))
+    @router.callback_query(F.data.startswith("shop_ok:"))
+    @router.callback_query(F.data.startswith("submit:"))
+    @router.callback_query(F.data.startswith("join:"))
+    @router.callback_query(F.data.startswith("profile_"))
+    @router.callback_query(F.data.startswith("job_board:"))
+    @router.callback_query(F.data.startswith("job_claim:"))
+    @router.callback_query(F.data.startswith("job_done:"))
+    @router.callback_query(F.data.startswith("job_review:"))
+    @router.callback_query(F.data.startswith("order:"))
+    @router.callback_query(F.data.startswith("quest_"))
+    @router.callback_query(F.data.startswith("add_skill:"))
+    @router.callback_query(F.data.startswith("skills_board:"))
+    async def redirect_legacy_callbacks(callback: CallbackQuery, bot: Bot) -> None:
+        if callback.from_user is None:
+            return
+        await callback.answer("Откройте приложение Lab21")
+        await _send_app_prompt(callback.from_user.id, bot)
+
     class FeedbackIntakeFilter(Filter):
         """Match /bug and /upgrade in the bugs topic (including album follow-ups)."""
 
@@ -728,38 +787,21 @@ def create_router(
                 message.from_user.full_name,
                 message.from_user.username,
             )
-            approved = user.is_approved
-            pending = None if approved else await get_pending_application(session, user.telegram_id)
             telegram_id = user.telegram_id
         async with factory.begin() as session:
             user = await session.get(User, telegram_id)
             assert user is not None
             await sync_user_commands(bot, user)
             await delete_quietly(message)
-            if approved:
-                await bot.send_message(
-                    telegram_id,
-                    phrase("onboarding", "recognized"),
-                    reply_markup=ReplyKeyboardRemove(),
-                )
-                await upsert_status_card(bot, session, user)
-                return
-            if pending is not None:
-                await bot.send_message(
-                    telegram_id,
-                    phrase("onboarding", "pending"),
-                    reply_markup=ReplyKeyboardRemove(),
-                )
-                return
+            text = phrase("onboarding", "welcome")
+            if user.is_approved:
+                text = phrase("onboarding", "recognized")
+            elif await get_pending_application(session, user.telegram_id) is not None:
+                text = phrase("onboarding", "pending")
             await bot.send_message(
                 telegram_id,
-                phrase("onboarding", "welcome"),
-                reply_markup=ReplyKeyboardRemove(),
-            )
-            await bot.send_message(
-                telegram_id,
-                phrase("onboarding", "choose_path"),
-                reply_markup=onboarding_keyboard(),
+                text + "\n\nВсе действия — в приложении Lab21.",
+                reply_markup=start_keyboard(settings),
             )
 
     @router.message(F.text.casefold() == "приклониться")

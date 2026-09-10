@@ -1,3 +1,10 @@
+FROM node:22-alpine AS webapp
+WORKDIR /webapp
+COPY webapp/package.json webapp/package-lock.json* ./
+RUN npm install
+COPY webapp/ ./
+RUN npm run build
+
 FROM python:3.12-slim AS runtime
 
 ARG GIT_SHA=unknown
@@ -17,8 +24,10 @@ COPY alembic ./alembic
 COPY alembic.ini ./
 COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
 
+COPY --from=webapp /src/lab21_bot/miniapp/static ./src/lab21_bot/miniapp/static
+
 RUN pip install . \
-    && mkdir -p /app/uploads/products /app/uploads/quests \
+    && mkdir -p /app/uploads/products /app/uploads/quests /app/uploads/memes \
     && chown -R lab21:lab21 /app/uploads \
     && sed -i 's/\r$//' /docker-entrypoint.sh \
     && chmod +x /docker-entrypoint.sh

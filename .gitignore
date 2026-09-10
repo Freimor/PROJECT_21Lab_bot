@@ -12,4 +12,9 @@ build/
 *.egg-info/
 .idea/
 .vscode/
+secrets/amnezia-a/*
+!secrets/amnezia-a/.gitkeep
+secrets/amnezia-b/*
+!secrets/amnezia-b/.gitkeep
+scripts/bin/
 

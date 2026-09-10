@@ -49,6 +49,7 @@ from lab21_bot.services.seasons import (
 from lab21_bot.services.settings import SettingError, get_int_setting, set_int_setting
 from lab21_bot.services.templates import MemeCollectionInfo, list_meme_collections
 from lab21_bot.services.uploads import UploadError, save_quest_image
+from lab21_bot.telegram_client import create_bot
 
 router = APIRouter()
 
@@ -65,7 +66,7 @@ _GAME_SETTING_KEYS = (
 
 
 def _bot(settings: Settings) -> Bot:
-    return Bot(settings.telegram_bot_token.get_secret_value())
+    return create_bot(settings)
 
 
 def _redirect(path: str = "/gamification/quests", *, message: str = "", error: str = "") -> RedirectResponse:

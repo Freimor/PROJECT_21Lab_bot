@@ -120,8 +120,9 @@ def test_shop_card_html_and_keyboard() -> None:
     assert "25" in html and "🙏" in html
     assert product_is_available(product)
     button = shop_card_keyboard(product).inline_keyboard[0][0]
-    assert button.text == "Заказать"
-    assert button.callback_data == "shop_buy:3"
+    assert button.text == "Открыть в приложении"
+    assert button.web_app is not None
+    assert button.web_app.url.endswith("/app#/shop")
 
     product.stock = 0
     assert not product_is_available(product)

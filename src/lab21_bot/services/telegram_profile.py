@@ -7,10 +7,9 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lab21_bot.models import User
+from lab21_bot.telegram_client import TELEGRAM_API, telegram_httpx, telegram_request
 
 logger = structlog.get_logger(__name__)
-
-TELEGRAM_API = "https://api.telegram.org"
 
 
 class TelegramProfileError(RuntimeError):
@@ -23,13 +22,13 @@ async def _telegram_call(
     method: str,
     *,
     params: dict[str, Any] | None = None,
-    timeout: float = 20.0,
+    request_timeout: float = 20.0,
 ) -> dict[str, Any]:
     try:
         response = await client.get(
             f"{TELEGRAM_API}/bot{bot_token}/{method}",
             params=params,
-            timeout=timeout,
+            timeout=request_timeout,
         )
         response.raise_for_status()
     except httpx.HTTPError as exc:
@@ -81,15 +80,25 @@ async def sync_user_profile(
     Requires that the user has previously opened a private chat with the bot
     (e.g. pressed /start). Otherwise Telegram returns chat-not-found.
     """
-    owns_client = client is None
-    http = client or httpx.AsyncClient()
+    if client is None:
+        async with telegram_httpx(request_timeout=20.0) as http:
+            return await _sync_user_profile(session, user, bot_token, http)
+    return await _sync_user_profile(session, user, bot_token, client)
+
+
+async def _sync_user_profile(
+    session: AsyncSession,
+    user: User,
+    bot_token: str,
+    http: httpx.AsyncClient,
+) -> User:
     try:
         chat = await _telegram_call(
             http,
             bot_token,
             "getChat",
             params={"chat_id": user.telegram_id},
-            timeout=5.0,
+            request_timeout=5.0,
         )
         user.full_name = _compose_full_name(chat)
         username = chat.get("username")
@@ -103,9 +112,6 @@ async def sync_user_profile(
     except TelegramProfileError as exc:
         logger.info("profile_sync_skipped", user_id=user.telegram_id, error=str(exc))
         return user
-    finally:
-        if owns_client:
-            await http.aclose()
 
 
 async def sync_users_profiles(
@@ -113,7 +119,7 @@ async def sync_users_profiles(
     users: list[User],
     bot_token: str,
 ) -> None:
-    async with httpx.AsyncClient() as client:
+    async with telegram_httpx(request_timeout=20.0) as client:
         for user in users:
             await sync_user_profile(session, user, bot_token, client=client)
 
@@ -122,20 +128,28 @@ async def download_telegram_file(
     bot_token: str,
     file_id: str,
 ) -> tuple[bytes, str]:
-    async with httpx.AsyncClient() as client:
-        file_info = await _telegram_call(
-            client,
-            bot_token,
-            "getFile",
+    try:
+        info_response = await telegram_request(
+            "get",
+            f"{TELEGRAM_API}/bot{bot_token}/getFile",
+            request_timeout=20.0,
             params={"file_id": file_id},
         )
+        info_response.raise_for_status()
+        payload = info_response.json()
+        if not payload.get("ok"):
+            raise TelegramProfileError(str(payload.get("description", "Telegram API error")))
+        file_info = cast(dict[str, Any], payload["result"])
         file_path = file_info.get("file_path")
         if not file_path:
             raise TelegramProfileError("Файл аватара недоступен")
-        response = await client.get(
+        response = await telegram_request(
+            "get",
             f"{TELEGRAM_API}/file/bot{bot_token}/{file_path}",
-            timeout=30.0,
+            request_timeout=30.0,
         )
         response.raise_for_status()
         content_type = response.headers.get("content-type", "image/jpeg")
         return response.content, content_type
+    except httpx.HTTPError as exc:
+        raise TelegramProfileError(f"Telegram недоступен: {exc}") from exc
