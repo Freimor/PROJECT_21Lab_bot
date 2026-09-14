@@ -145,7 +145,7 @@ services:
     profiles: ["tunnel"]
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: ["tunnel", "--no-autoupdate", "--url", "http://caddy:80"]
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "--url", "http://caddy:80"]
     depends_on:
       caddy:
         condition: service_started
