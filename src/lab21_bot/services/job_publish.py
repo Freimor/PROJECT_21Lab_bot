@@ -11,7 +11,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lab21_bot.data import phrase, skill_title
-from lab21_bot.keyboards import job_board_keyboard
+from lab21_bot.keyboards import job_board_keyboard, miniapp_available, miniapp_button
 from lab21_bot.models import ServiceJob, ServiceJobStatus, User
 from lab21_bot.services.destinations import job_destination
 from lab21_bot.services.jobs import list_job_notify_targets, set_job_message
@@ -168,15 +168,15 @@ async def notify_job_subscribers(
         price=job.price,
         respect=job.respect_reward,
     )
+    markup = (
+        InlineKeyboardMarkup(
+            inline_keyboard=[[miniapp_button("Открыть заказ", f"jobs/{job.id}")]]
+        )
+        if miniapp_available()
+        else None
+    )
     for user in targets:
         try:
-            from lab21_bot.keyboards import miniapp_button
-
-            markup = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [miniapp_button("Открыть заказ", f"jobs/{job.id}", settings)]
-                ]
-            )
             await bot.send_message(user.telegram_id, text, reply_markup=markup)
         except (TelegramBadRequest, TelegramForbiddenError):
             continue

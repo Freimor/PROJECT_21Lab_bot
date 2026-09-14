@@ -17,8 +17,16 @@ _ROLE_LABELS = role_labels()
 ROLE_LABELS = {role: _ROLE_LABELS[role.value] for role in StaffRole}
 
 
-def start_keyboard(settings: Settings | None = None) -> InlineKeyboardMarkup:
+def miniapp_available(settings: Settings | None = None) -> bool:
+    """Telegram rejects a whole message when a WebApp button is not HTTPS."""
     settings = settings or get_settings()
+    return settings.miniapp_enabled and settings.miniapp_base_url.startswith("https://")
+
+
+def start_keyboard(settings: Settings | None = None) -> InlineKeyboardMarkup | None:
+    settings = settings or get_settings()
+    if not miniapp_available(settings):
+        return None
     base = settings.miniapp_base_url.rstrip("/")
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -246,6 +254,12 @@ def job_board_keyboard(job_id: int, status: ServiceJobStatus | str) -> InlineKey
 def shop_card_keyboard(product: Product, settings: Settings | None = None) -> InlineKeyboardMarkup:
     available = product.is_visible and (product.stock is None or int(product.stock) > 0)
     if available:
+        if not miniapp_available(settings):
+            return InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="Купить", callback_data=f"shop_buy:{product.id}")],
+                ]
+            )
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [miniapp_button("Открыть в приложении", f"shop", settings)],
