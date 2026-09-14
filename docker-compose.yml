@@ -141,24 +141,17 @@ services:
       admin:
         condition: service_started
 
-  # Ephemeral public HTTPS for the Mini App when the ISP blocks inbound 443.
-  # URL is printed in the container logs (*.trycloudflare.com) and changes on restart.
-  # Host networking: QUIC/HTTP2 to Cloudflare is more reliable than via docker-bridge
-  # when Amnezia sidecars share the compose network.
+  # Named Cloudflare Tunnel (profile: tunnel). Cloudflare terminates HTTPS; this
+  # process only makes outbound connections. Create the tunnel in Zero Trust, add a
+  # public hostname → http://127.0.0.1:8082, put the token in CLOUDFLARE_TUNNEL_TOKEN.
   cloudflared:
     profiles: ["tunnel"]
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     network_mode: host
-    command:
-      [
-        "tunnel",
-        "--no-autoupdate",
-        "--protocol",
-        "http2",
-        "--url",
-        "http://127.0.0.1:${CADDY_TUNNEL_PORT:-8082}",
-      ]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?Set CLOUDFLARE_TUNNEL_TOKEN for the tunnel profile}
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "run"]
     depends_on:
       caddy:
         condition: service_started

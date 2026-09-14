@@ -63,18 +63,38 @@ curl "https://www.duckdns.org/update?domains=<name>&token=<token>&ip=<wan-ip>"
 Beware of updating DuckDNS from a machine behind a VPN: with `ip=` empty the record picks up the
 VPN exit address instead of the router's.
 
-### Cloudflare quick tunnel (when inbound HTTPS is blocked)
+### Cloudflare named tunnel (recommended when inbound HTTPS is blocked)
 
-Add the `tunnel` profile (`COMPOSE_PROFILES=amnezia,https,tunnel`). `cloudflared`
-fronts Caddy's internal `:80`, which still only proxies Mini App paths.
+Named tunnels are **free** (Cloudflare Zero Trust Free). You need a domain on Cloudflare
+DNS (DuckDNS alone is not enough). Quick `*.trycloudflare.com` tunnels are flaky here;
+use a named tunnel instead.
 
-```bash
-docker compose logs -f cloudflared   # wait for https://….trycloudflare.com
+1. Add the domain to Cloudflare (Free plan) and switch nameservers.
+2. Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared → name e.g. `lab21-nas`.
+3. Copy the **tunnel token**.
+4. Public Hostname:
+   - Subdomain / Domain: e.g. `lab21` + `your-domain.example`
+   - Type: HTTP
+   - URL: `http://127.0.0.1:8082`
+5. On the NAS `.env`:
+
+```env
+COMPOSE_PROFILES=amnezia,https,tunnel
+CLOUDFLARE_TUNNEL_TOKEN=eyJ...
+MINIAPP_ENABLED=true
+MINIAPP_BASE_URL=https://lab21.your-domain.example/app
 ```
 
-Put that URL into `.env` as `MINIAPP_BASE_URL=https://….trycloudflare.com/app`, recreate
-`bot`, and set the same URL in BotFather → Menu Button. The hostname changes every time
-`cloudflared` restarts.
+`8082` is Caddy's loopback-only HTTP listener that proxies only `/app`, `/api/miniapp`,
+`/uploads` — the admin UI stays off the internet.
+
+6. `docker compose up -d` and set BotFather Menu Button to the same `/app` URL.
+
+### Cloudflare quick tunnel (dev only; unreliable on this NAS)
+
+Add the `tunnel` profile was previously used with `cloudflared tunnel --url …` and
+`*.trycloudflare.com`. Prefer the named tunnel above: the URL is stable and Error 1033
+showed up repeatedly with quick tunnels on this ISP.
 
 ## Development with tunnel
 
