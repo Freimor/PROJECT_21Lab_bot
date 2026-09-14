@@ -130,6 +130,8 @@ services:
       ADMIN_PORT: ${ADMIN_PORT:-8080}
     ports:
       - "${HTTPS_HOST_PORT:-8443}:443"
+      # Loopback-only HTTP for cloudflared on the host network (not LAN-wide).
+      - "127.0.0.1:${CADDY_TUNNEL_PORT:-8082}:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ${CERTS_DIR:-./certs}:/certs:ro
@@ -141,11 +143,22 @@ services:
 
   # Ephemeral public HTTPS for the Mini App when the ISP blocks inbound 443.
   # URL is printed in the container logs (*.trycloudflare.com) and changes on restart.
+  # Host networking: QUIC/HTTP2 to Cloudflare is more reliable than via docker-bridge
+  # when Amnezia sidecars share the compose network.
   cloudflared:
     profiles: ["tunnel"]
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "--url", "http://caddy:80"]
+    network_mode: host
+    command:
+      [
+        "tunnel",
+        "--no-autoupdate",
+        "--protocol",
+        "http2",
+        "--url",
+        "http://127.0.0.1:${CADDY_TUNNEL_PORT:-8082}",
+      ]
     depends_on:
       caddy:
         condition: service_started
