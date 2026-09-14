@@ -94,6 +94,7 @@ async def main() -> None:
         log.warning("quest_posts_refresh_failed", error=str(exc))
     log.info(
         "bot_started",
+        llm_enabled=settings.llm_enabled,
         model=settings.llm_model,
         provider=settings.llm_provider,
         git_sha=settings.app_git_sha,
