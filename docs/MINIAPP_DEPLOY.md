@@ -25,6 +25,7 @@ LAN at `ADMIN_HOST_PORT`.
 ```env
 COMPOSE_PROFILES=amnezia,https
 PUBLIC_DOMAIN=your-name.duckdns.org
+DUCKDNS_TOKEN=your-duckdns-token
 HTTPS_HOST_PORT=8443
 MINIAPP_ENABLED=true
 MINIAPP_BASE_URL=https://your-name.duckdns.org/app
@@ -33,9 +34,10 @@ MINIAPP_BASE_URL=https://your-name.duckdns.org/app
 Keep `ADMIN_BASE_URL` on the LAN address (`http://192.168.x.x:8081`): an `https://` value marks
 session cookies Secure, and the admin UI then refuses to log in over plain http.
 
-Router: forward public **443 → `HTTPS_HOST_PORT`** on the NAS. Port 80 stays closed — the
-certificate is issued over TLS-ALPN on 443. UGOS keeps its own nginx on host 80/443 (it just
-redirects to the UI on 9999/9443), which is why Caddy publishes elsewhere.
+Router: forward public **443 → `HTTPS_HOST_PORT`** on the NAS so Telegram can open `/app`.
+Port 80 stays closed. The certificate is issued via **DuckDNS DNS-01** (no inbound ACME
+needed). UGOS keeps its own nginx on host 80/443 (redirect to 9999/9443), which is why
+Caddy publishes on `HTTPS_HOST_PORT` instead.
 
 DDNS keeps the name pointed at the router's WAN address. UGOS does this in Control Panel →
 Device Connection → Remote Access; DuckDNS can also be updated by hand:

@@ -119,14 +119,18 @@ services:
         condition: service_healthy
 
   # Public HTTPS for the Mini App (profile: https) — Telegram accepts HTTPS only.
-  # Forward the router's public 443 to HTTPS_HOST_PORT on this host; the certificate
-  # is issued over TLS-ALPN, so port 80 never has to be opened.
+  # Certificate via DuckDNS DNS-01 (DUCKDNS_TOKEN); Let's Encrypt needs no inbound
+  # ports. Still forward the router's public 443 → HTTPS_HOST_PORT for clients.
   caddy:
     profiles: ["https"]
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: lab21-caddy
     restart: unless-stopped
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Set PUBLIC_DOMAIN in .env to use the https profile}
+      DUCKDNS_TOKEN: ${DUCKDNS_TOKEN:?Set DUCKDNS_TOKEN in .env to use the https profile}
       ADMIN_PORT: ${ADMIN_PORT:-8080}
     ports:
       - "${HTTPS_HOST_PORT:-8443}:443"

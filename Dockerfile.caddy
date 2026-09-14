@@ -1,0 +1,6 @@
+# Custom Caddy with DuckDNS DNS-01 (no inbound 80/443 needed to obtain the cert).
+FROM caddy:2-builder AS builder
+RUN xcaddy build --with github.com/caddy-dns/duckdns
+
+FROM caddy:2-alpine
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy

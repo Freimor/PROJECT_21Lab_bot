@@ -1,14 +1,14 @@
 {
 	admin off
-	# The router maps its public 443 to HTTPS_HOST_PORT on the Docker host, so
-	# Let's Encrypt reaches Caddy over TLS-ALPN and port 80 can stay closed.
+	# Prefer DNS-01 via DuckDNS. HTTP challenge stays off so UGOS can keep host :80.
+	# TLS-ALPN is left available as a fallback when the ISP actually forwards 443.
 	auto_https disable_redirects
 }
 
 {$PUBLIC_DOMAIN} {
 	tls {
-		issuer acme {
-			disable_http_challenge
+		dns duckdns {
+			api_token {env.DUCKDNS_TOKEN}
 		}
 	}
 
