@@ -4,7 +4,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import Connection, pool, text
+from sqlalchemy import Connection, inspect, pool, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from lab21_bot.config import get_settings
@@ -34,6 +34,32 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _is_fresh_database(connection: Connection) -> bool:
+    tables = set(inspect(connection).get_table_names())
+    return "alembic_version" not in tables and "users" not in tables
+
+
+def _bootstrap_schema(connection: Connection, head: str) -> None:
+    """Build the schema from the models and mark the whole chain as applied.
+
+    Revision 0001 creates tables straight from the live models, so replaying the
+    later incremental revisions on an empty database fails on columns that 0001
+    already created.
+    """
+    target_metadata.create_all(bind=connection)
+    connection.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS alembic_version ("
+            "version_num VARCHAR(32) NOT NULL, "
+            "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
+        )
+    )
+    connection.execute(
+        text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
+        {"revision": head},
+    )
+
+
 def do_run_migrations(connection: Connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
     with context.begin_transaction():
@@ -41,7 +67,11 @@ def do_run_migrations(connection: Connection) -> None:
             connection.execute(
                 text("SELECT pg_advisory_xact_lock(:key)"), {"key": MIGRATION_LOCK_KEY}
             )
-        context.run_migrations()
+        head = context.get_head_revision()
+        if head is not None and _is_fresh_database(connection):
+            _bootstrap_schema(connection, head)
+        else:
+            context.run_migrations()
 
 
 async def run_async_migrations() -> None:
