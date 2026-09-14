@@ -139,6 +139,17 @@ services:
       admin:
         condition: service_started
 
+  # Ephemeral public HTTPS for the Mini App when the ISP blocks inbound 443.
+  # URL is printed in the container logs (*.trycloudflare.com) and changes on restart.
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--url", "http://caddy:80"]
+    depends_on:
+      caddy:
+        condition: service_started
+
   watchdog:
     build:
       context: .

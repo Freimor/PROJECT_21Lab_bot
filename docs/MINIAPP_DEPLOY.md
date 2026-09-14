@@ -63,6 +63,19 @@ curl "https://www.duckdns.org/update?domains=<name>&token=<token>&ip=<wan-ip>"
 Beware of updating DuckDNS from a machine behind a VPN: with `ip=` empty the record picks up the
 VPN exit address instead of the router's.
 
+### Cloudflare quick tunnel (when inbound HTTPS is blocked)
+
+Add the `tunnel` profile (`COMPOSE_PROFILES=amnezia,https,tunnel`). `cloudflared`
+fronts Caddy's internal `:80`, which still only proxies Mini App paths.
+
+```bash
+docker compose logs -f cloudflared   # wait for https://….trycloudflare.com
+```
+
+Put that URL into `.env` as `MINIAPP_BASE_URL=https://….trycloudflare.com/app`, recreate
+`bot`, and set the same URL in BotFather → Menu Button. The hostname changes every time
+`cloudflared` restarts.
+
 ## Development with tunnel
 
 Telegram Mini App needs a public **HTTPS** URL. You do not need a bought domain.

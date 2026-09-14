@@ -3,15 +3,31 @@
 	auto_https off
 }
 
+# Public HTTPS when the ISP actually forwards 443 → HTTPS_HOST_PORT.
 {$PUBLIC_DOMAIN} {
-	# Certs are issued/renewed offline via DuckDNS DNS-01 (lego). GranLine times
-	# out Let's Encrypt validators on inbound 443, so in-process ACME is unreliable.
 	tls /certs/{$PUBLIC_DOMAIN}.crt /certs/{$PUBLIC_DOMAIN}.key
 
 	encode zstd gzip
 
-	# Only the Mini App surface is published. The admin UI keeps answering on the
-	# LAN port (ADMIN_HOST_PORT) and never becomes reachable from the internet.
+	@miniapp path /app /app/* /api/miniapp/* /uploads/*
+	handle @miniapp {
+		reverse_proxy admin:{$ADMIN_PORT:8080} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		respond 404
+	}
+}
+
+# Plain HTTP on the Docker network only (not published on the host). Used by
+# Cloudflare quick tunnel so the admin UI never leaves the LAN.
+:80 {
+	encode zstd gzip
+
 	@miniapp path /app /app/* /api/miniapp/* /uploads/*
 	handle @miniapp {
 		reverse_proxy admin:{$ADMIN_PORT:8080} {
