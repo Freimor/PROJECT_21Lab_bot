@@ -820,11 +820,11 @@ async def resolve_people_application(
         else:
             if was_skill_validation and was_approved:
                 text = message_skill_validation_rejected(
-                    note=application.decision_note, reviewer=user
+                    note=application.decision_note, reviewer=actor
                 )
             else:
                 text = message_application_rejected(
-                    note=application.decision_note, reviewer=user
+                    note=application.decision_note, reviewer=actor
                 )
             label = "Заявка отклонена"
         await sync_user_commands_http(token, application.user)
