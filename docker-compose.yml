@@ -118,6 +118,26 @@ services:
       postgres:
         condition: service_healthy
 
+  # Public HTTPS for the Mini App (profile: https) — Telegram accepts HTTPS only.
+  # Forward the router's public 443 to HTTPS_HOST_PORT on this host; the certificate
+  # is issued over TLS-ALPN, so port 80 never has to be opened.
+  caddy:
+    profiles: ["https"]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Set PUBLIC_DOMAIN in .env to use the https profile}
+      ADMIN_PORT: ${ADMIN_PORT:-8080}
+    ports:
+      - "${HTTPS_HOST_PORT:-8443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      admin:
+        condition: service_started
+
   watchdog:
     build:
       context: .
@@ -146,3 +166,5 @@ volumes:
   control_data:
   deploy_repo:
   uploads_data:
+  caddy_data:
+  caddy_config:

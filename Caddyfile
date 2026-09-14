@@ -1,0 +1,27 @@
+{
+	admin off
+	# The router maps its public 443 to HTTPS_HOST_PORT on the Docker host, so
+	# Let's Encrypt reaches Caddy over TLS-ALPN and port 80 can stay closed.
+	auto_https disable_redirects
+}
+
+{$PUBLIC_DOMAIN} {
+	tls {
+		issuer acme {
+			disable_http_challenge
+		}
+	}
+
+	encode zstd gzip
+
+	# Only the Mini App surface is published. The admin UI keeps answering on the
+	# LAN port (ADMIN_HOST_PORT) and never becomes reachable from the internet.
+	@miniapp path /app /app/* /api/miniapp/* /uploads/*
+	handle @miniapp {
+		reverse_proxy admin:{$ADMIN_PORT:8080}
+	}
+
+	handle {
+		respond 404
+	}
+}

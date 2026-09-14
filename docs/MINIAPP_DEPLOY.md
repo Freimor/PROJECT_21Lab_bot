@@ -16,6 +16,37 @@ For NAS Telegram outbound proxy / remote SSH editing see [NAS_OPS.md](NAS_OPS.md
    - Optional: set domain for Web App
 4. Rebuild Docker image (webapp is built in multi-stage Dockerfile).
 
+## NAS behind a home router (Compose profile `https`)
+
+The `caddy` service publishes **only** the Mini App paths (`/app`, `/api/miniapp`, `/uploads`)
+and answers 404 elsewhere, so the admin UI is never exposed to the internet — reach it on the
+LAN at `ADMIN_HOST_PORT`.
+
+```env
+COMPOSE_PROFILES=amnezia,https
+PUBLIC_DOMAIN=your-name.duckdns.org
+HTTPS_HOST_PORT=8443
+MINIAPP_ENABLED=true
+MINIAPP_BASE_URL=https://your-name.duckdns.org/app
+```
+
+Keep `ADMIN_BASE_URL` on the LAN address (`http://192.168.x.x:8081`): an `https://` value marks
+session cookies Secure, and the admin UI then refuses to log in over plain http.
+
+Router: forward public **443 → `HTTPS_HOST_PORT`** on the NAS. Port 80 stays closed — the
+certificate is issued over TLS-ALPN on 443. UGOS keeps its own nginx on host 80/443 (it just
+redirects to the UI on 9999/9443), which is why Caddy publishes elsewhere.
+
+DDNS keeps the name pointed at the router's WAN address. UGOS does this in Control Panel →
+Device Connection → Remote Access; DuckDNS can also be updated by hand:
+
+```bash
+curl "https://www.duckdns.org/update?domains=<name>&token=<token>&ip=<wan-ip>"
+```
+
+Beware of updating DuckDNS from a machine behind a VPN: with `ip=` empty the record picks up the
+VPN exit address instead of the router's.
+
 ## Development with tunnel
 
 Telegram Mini App needs a public **HTTPS** URL. You do not need a bought domain.
