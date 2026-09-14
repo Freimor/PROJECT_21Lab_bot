@@ -81,4 +81,6 @@ def run() -> None:
         host=settings.admin_host,
         port=settings.admin_port,
         log_level=settings.log_level.lower(),
+        proxy_headers=True,
+        forwarded_allow_ips="*",
     )

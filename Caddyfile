@@ -14,7 +14,11 @@
 	# LAN port (ADMIN_HOST_PORT) and never becomes reachable from the internet.
 	@miniapp path /app /app/* /api/miniapp/* /uploads/*
 	handle @miniapp {
-		reverse_proxy admin:{$ADMIN_PORT:8080}
+		reverse_proxy admin:{$ADMIN_PORT:8080} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+			header_up X-Real-IP {remote_host}
+		}
 	}
 
 	handle {
