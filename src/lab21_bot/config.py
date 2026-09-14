@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     job_channel_id: int | None = None  # устаревший алиас JOB_CHANNEL_ID → тот же chat
     shop_chat_id: int | None = None  # витрина магазина; иначе main + shop_thread
 
+    # False on hosts that cannot run a model (low RAM / no GPU): staff approve raw sources.
+    llm_enabled: bool = True
     llm_provider: str = "ollama"
     llm_base_url: str = "http://ollama:11434"
     llm_model: str = "lakomoor/vikhr-llama-3.2-1b-instruct:1b"

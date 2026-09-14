@@ -501,12 +501,14 @@ async def _publish_item(
     return sent_group[0].message_id
 
 
-async def _send_review_item(bot: Bot, chat_id: int, item: ContentItem) -> None:
+async def _send_review_item(
+    bot: Bot, chat_id: int, item: ContentItem, *, llm_enabled: bool = True
+) -> None:
     await _publish_item(bot, chat_id, item)
     await bot.send_message(
         chat_id,
         f"Действия с материалом #{item.id}:",
-        reply_markup=content_actions(item),
+        reply_markup=content_actions(item, llm_enabled=llm_enabled),
     )
 
 
@@ -2961,7 +2963,11 @@ def create_router(
                 await delete_ids(bot, message.chat.id, *ephemeral)
             await wait.edit_text(
                 f"Заявка #{item.id} в очереди{photo_note}.\n"
-                "Исходник без LLM — после первого одобрения staff запустит оформление."
+                + (
+                    "Исходник без LLM — после первого одобрения staff запустит оформление."
+                    if settings.llm_enabled
+                    else "Staff проверит текст и опубликует его как есть."
+                )
             )
             await asyncio.sleep(12)
             await delete_quietly(wait)
@@ -2982,20 +2988,29 @@ def create_router(
                 if item.status is ContentStatus.PUBLISHED:
                     raise ContentError("Уже опубликовано")
                 source = item.source_text
-                runtime = await get_llm_runtime(session, settings)
-            generated = await llm.generate_staff_post(
-                source,
-                interview=source.lstrip().startswith("Q:"),
-                job=source.lstrip().startswith("JOB:"),
-                runtime=runtime,
-            )
+                runtime = (
+                    await get_llm_runtime(session, settings) if settings.llm_enabled else None
+                )
+            if settings.llm_enabled:
+                generated = await llm.generate_staff_post(
+                    source,
+                    interview=source.lstrip().startswith("Q:"),
+                    job=source.lstrip().startswith("JOB:"),
+                    runtime=runtime,
+                )
+            else:
+                generated = source
             async with factory.begin() as session:
                 item = await mark_llm_draft(session, item_id, generated)
                 await notify_admin_event(
                     session,
                     settings,
                     "llm_done",
-                    title=f"LLM-черновик готов #{item_id}",
+                    title=(
+                        f"LLM-черновик готов #{item_id}"
+                        if settings.llm_enabled
+                        else f"Исходник одобрен #{item_id}"
+                    ),
                     body="Проверьте перед публикацией.",
                     link=f"/publications#item-{item_id}",
                     bot=bot,
@@ -3003,7 +3018,10 @@ def create_router(
             await callback.answer("Готово")
             if isinstance(callback.message, Message):
                 await callback.message.edit_text(
-                    generated, reply_markup=content_actions(item, staff_draft=True)
+                    generated,
+                    reply_markup=content_actions(
+                        item, staff_draft=True, llm_enabled=settings.llm_enabled
+                    ),
                 )
         except (AccessDenied, ContentError, LLMError) as error:
             await callback.answer(str(error), show_alert=True)
@@ -3041,7 +3059,10 @@ def create_router(
                 raise ContentError("Материал не найден")
             item.draft_text = message.text
         await state.clear()
-        await message.answer("Текст обновлён.", reply_markup=content_actions(item))
+        await message.answer(
+            "Текст обновлён.",
+            reply_markup=content_actions(item, llm_enabled=settings.llm_enabled),
+        )
 
     @router.callback_query(F.data.startswith("content:publish:"))
     async def publish_content(callback: CallbackQuery, bot: Bot) -> None:
@@ -3200,7 +3221,9 @@ def create_router(
             )
             return
         for item in items:
-            await _send_review_item(bot, callback.message.chat.id, item)
+            await _send_review_item(
+                bot, callback.message.chat.id, item, llm_enabled=settings.llm_enabled
+            )
 
     @router.callback_query(F.data.regexp(r"^order:(approve|cancel):\d+$"))
     async def order_resolution(callback: CallbackQuery, bot: Bot) -> None:
@@ -3620,7 +3643,11 @@ def create_router(
                 )
             await message.answer(
                 f"Заявка #{item.id} в очереди.\n"
-                "Исходник без LLM — после одобрения staff запустит оформление."
+                + (
+                    "Исходник без LLM — после одобрения staff запустит оформление."
+                    if settings.llm_enabled
+                    else "Staff проверит текст и опубликует его как есть."
+                )
             )
         except (AccessDenied, ContentError) as error:
             async with factory.begin() as session:

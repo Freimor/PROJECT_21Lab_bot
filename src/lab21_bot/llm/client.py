@@ -65,6 +65,8 @@ class LLMClient:
         )
 
     async def ping(self) -> bool:
+        if not self.settings.llm_enabled:
+            return False
         if self.settings.llm_provider == "openvino":
             from lab21_bot.llm.openvino_backend import ping_sync
 
@@ -96,6 +98,8 @@ class LLMClient:
             return False
 
     async def list_models(self) -> list[str]:
+        if not self.settings.llm_enabled:
+            return []
         if self.settings.llm_provider == "openvino":
             return [self.settings.llm_model]
         if self.settings.llm_provider == "openai":
@@ -145,6 +149,8 @@ class LLMClient:
         job: bool = False,
         runtime: LlmRuntime | None = None,
     ) -> str:
+        if not self.settings.llm_enabled:
+            raise LLMError("LLM отключена (LLM_ENABLED=false) — публикуйте исходник как есть")
         if not note.strip():
             raise LLMError("Заметка пуста")
         cfg = self._runtime_or_defaults(runtime)

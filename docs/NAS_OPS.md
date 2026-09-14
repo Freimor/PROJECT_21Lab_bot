@@ -35,13 +35,35 @@ docker compose up -d --build
 
 `ENABLE_RANDOM=1` on each bridge picks a random `.conf` from that folder on (re)start — useful as a second layer inside one exit.
 
-## 2. White IP + Mini App
+## 2. Deploy on the NAS without LLM
+
+The UGREEN DXP480T has 8 GB RAM and no GPU, so no model runs there. Deploy with LLM off:
+
+```env
+LLM_ENABLED=false
+COMPOSE_PROFILES=amnezia
+AMNEZIA_ENABLE_RANDOM=0
+AMNEZIA_LAN_NETWORK=192.168.1.0/24
+TELEGRAM_PROXIES=socks5://amnezia-a:1080,socks5://amnezia-b:1080
+ADMIN_PORT=8081
+```
+
+With `LLM_ENABLED=false` the moderation pipeline is unchanged, but «Одобрить → LLM» becomes
+«Одобрить исходник»: the author's text becomes the draft as is. Nothing calls Ollama/OpenVINO,
+and the `ollama` profile stays off, so no model is pulled.
+
+`ADMIN_PORT=8081` because UGOS apps often already hold `8080`. Check with `docker ps` first.
+
+Turning LLM back on later = set `LLM_ENABLED=true`, add the `ollama` profile (or point
+`LLM_PROVIDER=openai` at a machine with an NPU/GPU) and recreate `bot` + `admin`.
+
+## 3. White IP + Mini App
 
 White IP is for **inbound HTTPS** (Mini App / BotFather URL). See [MINIAPP_DEPLOY.md](MINIAPP_DEPLOY.md).
 
 Outbound Telegram still uses `TELEGRAM_PROXIES` unless your ISP reaches `api.telegram.org` without help.
 
-## 3. Remote access so Cursor can edit the bot on NAS
+## 4. Remote access so Cursor can edit the bot on NAS
 
 Goal: agent/IDE reaches the repo on the NAS without exposing the whole LAN.
 
@@ -72,6 +94,7 @@ Do **not** open NAS SSH (`22`) to the raw white IP without keys + fail2ban/allow
 - [ ] Tailscale up on NAS; you can SSH from home/PC
 - [ ] Repo path known; Cursor Remote SSH works once
 - [ ] `secrets/amnezia-*/*.conf` present; `TELEGRAM_PROXIES` set
+- [ ] `LLM_ENABLED=false` on the NAS (no model there)
 - [ ] `docker compose ps` shows bot + amnezia-a/b healthy
 - [ ] Bot answers `/start` in Telegram
 - [ ] (Later) HTTPS + `MINIAPP_BASE_URL` for Mini App

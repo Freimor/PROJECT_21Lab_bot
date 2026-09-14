@@ -129,6 +129,7 @@ async def llm_settings_page(
         runtime=runtime,
         models=models,
         llm_ok=llm_ok,
+        llm_enabled=settings.llm_enabled,
         llm_provider=settings.llm_provider,
         llm_device=settings.llm_device,
         llm_base_url=settings.llm_base_url,

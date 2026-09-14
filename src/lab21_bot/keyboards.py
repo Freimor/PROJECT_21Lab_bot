@@ -341,13 +341,15 @@ def reboot_confirm_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def content_actions(item: ContentItem, *, staff_draft: bool = False) -> InlineKeyboardMarkup:
+def content_actions(
+    item: ContentItem, *, staff_draft: bool = False, llm_enabled: bool = True
+) -> InlineKeyboardMarkup:
     if item.kind in {ContentKind.STORY, ContentKind.IMPORTANT} and not item.llm_processed:
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="Одобрить → LLM",
+                        text="Одобрить → LLM" if llm_enabled else "Одобрить исходник",
                         callback_data=f"content:regen:{item.id}",
                     ),
                     InlineKeyboardButton(

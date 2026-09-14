@@ -135,6 +135,7 @@ async def publications_page(
         stats=stats,
         kind_labels={k.value: v for k, v in KIND_LABELS.items()},
         timezone=settings.timezone,
+        llm_enabled=settings.llm_enabled,
         **nav,
         message=request.query_params.get("message"),
         error=request.query_params.get("error"),
@@ -389,28 +390,36 @@ async def publications_generate_llm(
         if item.status is not ContentStatus.MODERATION:
             raise ContentError("Генерация только из очереди модерации")
         source = item.source_text
-        interview = source.lstrip().startswith("Q:")
-        job = source.lstrip().startswith("JOB:")
-        client = LLMClient(settings)
-        try:
-            runtime = await get_llm_runtime(session, settings)
-            draft = await client.generate_staff_post(
-                source, interview=interview, job=job, runtime=runtime
-            )
-        finally:
-            await client.close()
+        if settings.llm_enabled:
+            interview = source.lstrip().startswith("Q:")
+            job = source.lstrip().startswith("JOB:")
+            client = LLMClient(settings)
+            try:
+                runtime = await get_llm_runtime(session, settings)
+                draft = await client.generate_staff_post(
+                    source, interview=interview, job=job, runtime=runtime
+                )
+            finally:
+                await client.close()
+        else:
+            draft = source
         await mark_llm_draft(session, item_id, draft, reviewer=reviewer)
+        title = (
+            f"LLM-черновик готов #{item_id}"
+            if settings.llm_enabled
+            else f"Исходник одобрен #{item_id}"
+        )
         await notify_admin_event(
             session,
             settings,
             "llm_done",
-            title=f"LLM-черновик готов #{item_id}",
+            title=title,
             body="Проверьте перед публикацией.",
             link=f"/publications#item-{item_id}",
         )
         return _redirect(
             f"/publications#item-{item_id}",
-            message=f"LLM-черновик готов #{item_id} — проверьте перед публикацией",
+            message=f"{title} — проверьте перед публикацией",
         )
     except (ContentError, LLMError) as exc:
         return _redirect(f"/publications#item-{item_id}", error=str(exc))

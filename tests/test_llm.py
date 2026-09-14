@@ -1,7 +1,8 @@
 import httpx
+import pytest
 
 from lab21_bot.config import Settings
-from lab21_bot.llm.client import LLMClient
+from lab21_bot.llm.client import LLMClient, LLMError
 
 
 def settings(provider: str) -> Settings:
@@ -78,6 +79,24 @@ async def test_openvino_adapter_uses_backend(monkeypatch) -> None:
         assert await client.generate_staff_post("Починили блок питания") == "<b>Черновик NPU</b>"
         assert len(calls) == 1
         assert calls[0].model_path.endswith("Qwen3.5-9B-int4-ov")
+    finally:
+        await client.close()
+
+
+async def test_disabled_llm_refuses_generation_and_ping() -> None:
+    cfg = Settings(
+        telegram_bot_token="token",
+        bootstrap_magister_id=1,
+        main_channel_id=-1001,
+        staff_chat_id=-1002,
+        llm_enabled=False,
+    )
+    client = LLMClient(cfg)
+    try:
+        assert await client.ping() is False
+        assert await client.list_models() == []
+        with pytest.raises(LLMError):
+            await client.generate_staff_post("Починили блок питания")
     finally:
         await client.close()
 
