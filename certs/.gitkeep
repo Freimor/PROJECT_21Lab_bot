@@ -1,0 +1,3 @@
+# Placeholder — real Let's Encrypt files are deployed to the NAS at runtime.
+# Issue with: docker run --rm -e DUCKDNS_TOKEN -v "$PWD/certs:/certs" goacme/lego:v4.22.2 \
+#   --email you@example.com --dns duckdns --path /certs --domains your.duckdns.org --accept-tos run

@@ -1,16 +1,12 @@
 {
 	admin off
-	# Prefer DNS-01 via DuckDNS. HTTP challenge stays off so UGOS can keep host :80.
-	# TLS-ALPN is left available as a fallback when the ISP actually forwards 443.
-	auto_https disable_redirects
+	auto_https off
 }
 
 {$PUBLIC_DOMAIN} {
-	tls {
-		dns duckdns {
-			api_token {env.DUCKDNS_TOKEN}
-		}
-	}
+	# Certs are issued/renewed offline via DuckDNS DNS-01 (lego). GranLine times
+	# out Let's Encrypt validators on inbound 443, so in-process ACME is unreliable.
+	tls /certs/{$PUBLIC_DOMAIN}.crt /certs/{$PUBLIC_DOMAIN}.key
 
 	encode zstd gzip
 

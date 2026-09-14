@@ -16,5 +16,7 @@ secrets/amnezia-a/*
 !secrets/amnezia-a/.gitkeep
 secrets/amnezia-b/*
 !secrets/amnezia-b/.gitkeep
+certs/*
+!certs/.gitkeep
 scripts/bin/
 

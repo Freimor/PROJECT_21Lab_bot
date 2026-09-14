@@ -25,7 +25,7 @@ LAN at `ADMIN_HOST_PORT`.
 ```env
 COMPOSE_PROFILES=amnezia,https
 PUBLIC_DOMAIN=your-name.duckdns.org
-DUCKDNS_TOKEN=your-duckdns-token
+CERTS_DIR=./certs
 HTTPS_HOST_PORT=8443
 MINIAPP_ENABLED=true
 MINIAPP_BASE_URL=https://your-name.duckdns.org/app
@@ -34,10 +34,24 @@ MINIAPP_BASE_URL=https://your-name.duckdns.org/app
 Keep `ADMIN_BASE_URL` on the LAN address (`http://192.168.x.x:8081`): an `https://` value marks
 session cookies Secure, and the admin UI then refuses to log in over plain http.
 
+### Certificate (DuckDNS DNS-01)
+
+Some ISPs time out Let's Encrypt inbound validators even when port forwarding looks
+correct. Issue the cert from a machine that can reach DuckDNS (your PC is fine):
+
+```powershell
+$env:DUCKDNS_TOKEN="your-token"
+docker run --rm -e DUCKDNS_TOKEN -v "${PWD}/certs:/certs" goacme/lego:v4.22.2 `
+  --email you@example.com --dns duckdns --path /certs `
+  --domains your-name.duckdns.org --accept-tos run
+```
+
+Copy `certs/certificates/*.crt` and `*.key` (renamed to `your-name.duckdns.org.crt/.key`)
+into `CERTS_DIR` on the NAS. Renew the same way before expiry (~60 days).
+
 Router: forward public **443 → `HTTPS_HOST_PORT`** on the NAS so Telegram can open `/app`.
-Port 80 stays closed. The certificate is issued via **DuckDNS DNS-01** (no inbound ACME
-needed). UGOS keeps its own nginx on host 80/443 (redirect to 9999/9443), which is why
-Caddy publishes on `HTTPS_HOST_PORT` instead.
+Port 80 stays closed. UGOS keeps its own nginx on host 80/443 (redirect to 9999/9443),
+which is why Caddy publishes on `HTTPS_HOST_PORT` instead.
 
 DDNS keeps the name pointed at the router's WAN address. UGOS does this in Control Panel →
 Device Connection → Remote Access; DuckDNS can also be updated by hand:
