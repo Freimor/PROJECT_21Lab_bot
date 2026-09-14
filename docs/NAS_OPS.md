@@ -45,14 +45,15 @@ COMPOSE_PROFILES=amnezia
 AMNEZIA_ENABLE_RANDOM=0
 AMNEZIA_LAN_NETWORK=192.168.1.0/24
 TELEGRAM_PROXIES=socks5://amnezia-a:1080,socks5://amnezia-b:1080
-ADMIN_PORT=8081
+ADMIN_HOST_PORT=8081
 ```
 
 With `LLM_ENABLED=false` the moderation pipeline is unchanged, but «Одобрить → LLM» becomes
 «Одобрить исходник»: the author's text becomes the draft as is. Nothing calls Ollama/OpenVINO,
 and the `ollama` profile stays off, so no model is pulled.
 
-`ADMIN_PORT=8081` because UGOS apps often already hold `8080`. Check with `docker ps` first.
+`ADMIN_HOST_PORT=8081` because UGOS apps often already hold `8080` — check with `docker ps` first.
+Keep `ADMIN_PORT=8080`: that is the port the admin process binds **inside** the container.
 
 Turning LLM back on later = set `LLM_ENABLED=true`, add the `ollama` profile (or point
 `LLM_PROVIDER=openai` at a machine with an NPU/GPU) and recreate `bot` + `admin`.

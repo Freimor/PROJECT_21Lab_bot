@@ -110,7 +110,8 @@ services:
       UPLOAD_DIR: /app/uploads
     command: ["sh", "-c", "alembic upgrade head && exec lab21-admin"]
     ports:
-      - "${ADMIN_PORT:-8080}:8080"
+      # ADMIN_PORT is the in-container bind; publish elsewhere when the host port is taken.
+      - "${ADMIN_HOST_PORT:-8080}:${ADMIN_PORT:-8080}"
     volumes:
       - uploads_data:/app/uploads
     depends_on:
