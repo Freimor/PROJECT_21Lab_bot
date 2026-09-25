@@ -21,6 +21,14 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 WEBAPP_DIR = Path(__file__).resolve().parents[1] / "miniapp" / "static"
 
 
+class MiniappFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if path in {"", ".", "index.html"}:
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
 
@@ -45,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     upload_root = Path(settings.upload_dir)
     upload_root.mkdir(parents=True, exist_ok=True)
+    Path(settings.project_files_dir).mkdir(parents=True, exist_ok=True)
 
     app = FastAPI(title="Lab21 Admin", lifespan=lifespan)
     app.add_middleware(
@@ -62,7 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if WEBAPP_DIR.is_dir():
             app.mount(
                 "/app",
-                StaticFiles(directory=str(WEBAPP_DIR), html=True),
+                MiniappFiles(directory=str(WEBAPP_DIR), html=True),
                 name="miniapp",
             )
         else:

@@ -1,0 +1,24 @@
+<div class="panel">
+  <div class="panel-head">
+    <h2>{{ task_calendar.label }}</h2>
+    <div class="cal-nav">
+      <a href="{{ cal_prev }}">←</a>
+      <a href="{{ cal_next }}">→</a>
+    </div>
+  </div>
+  <div class="cal-weekdays">
+    <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+  </div>
+  <div class="cal-grid">
+    {% for week in task_calendar.weeks %}
+      {% for day in week %}
+      <div class="cal-day{% if not day.in_month %} is-out{% endif %}{% if day.is_today %} is-today{% endif %}">
+        {% if day.date %}<div class="cal-num">{{ day.date.day }}</div>{% endif %}
+        {% for task in day.tasks %}
+        <a class="cal-chip" href="{{ task.href }}" style="border-left-color: {{ task.color }}" title="{{ task.hint }}">{{ task.title }}</a>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    {% endfor %}
+  </div>
+</div>

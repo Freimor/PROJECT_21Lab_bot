@@ -62,6 +62,8 @@ class Settings(BaseSettings):
         default=setting_default("application_expire_days"), ge=1, le=90
     )
     upload_dir: str = "/app/uploads"
+    # Private project files. Not mounted on /uploads.
+    project_files_dir: str = "/app/project_files"
     log_level: str = "INFO"
 
     control_dir: str = "/control"

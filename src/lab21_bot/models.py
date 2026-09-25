@@ -151,6 +151,7 @@ class FeedbackStatus(StrEnum):
     PENDING = "pending"
     ACCEPTED = "accepted"
     REJECTED = "rejected"
+    DONE = "done"
 
 
 class ServiceJobStatus(StrEnum):
@@ -619,6 +620,191 @@ class RoleDef(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class ProjectLinkKind(StrEnum):
+    ORDER = "order"
+    QUEST = "quest"
+    EVENT = "event"
+
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.telegram_id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    creator: Mapped[User] = relationship(foreign_keys=[created_by])
+    columns: Mapped[list[ProjectColumn]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    tags: Mapped[list[ProjectTag]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    tasks: Mapped[list[ProjectTask]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    docs: Mapped[list[ProjectDoc]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    folders: Mapped[list[ProjectFolder]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    files: Mapped[list[ProjectFile]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+
+
+class ProjectColumn(Base):
+    __tablename__ = "project_columns"
+    __table_args__ = (Index("ix_project_columns_project_position", "project_id", "position"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(120))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+    project: Mapped[Project] = relationship(back_populates="columns")
+    tasks: Mapped[list[ProjectTask]] = relationship(back_populates="column")
+
+
+class ProjectTag(Base):
+    __tablename__ = "project_tags"
+    __table_args__ = (UniqueConstraint("project_id", "title", name="uq_project_tags_title"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(64))
+    color: Mapped[str] = mapped_column(String(7), default="#6b7c93")
+
+    project: Mapped[Project] = relationship(back_populates="tags")
+
+
+class ProjectTask(Base):
+    __tablename__ = "project_tasks"
+    __table_args__ = (
+        Index("ix_project_tasks_column_position", "column_id", "position"),
+        Index("ix_project_tasks_dates", "start_on", "due_on"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    column_id: Mapped[int] = mapped_column(ForeignKey("project_columns.id"))
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text, default="")
+    color: Mapped[str] = mapped_column(String(7), default="#ff7a25")
+    start_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    due_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.telegram_id"))
+    link_kind: Mapped[ProjectLinkKind | None] = mapped_column(
+        str_enum(ProjectLinkKind), nullable=True
+    )
+    link_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    project: Mapped[Project] = relationship(back_populates="tasks")
+    column: Mapped[ProjectColumn] = relationship(back_populates="tasks")
+    creator: Mapped[User] = relationship(foreign_keys=[created_by])
+    assignee_links: Mapped[list[ProjectTaskAssignee]] = relationship(
+        back_populates="task", cascade="all, delete-orphan"
+    )
+    tag_links: Mapped[list[ProjectTaskTag]] = relationship(
+        back_populates="task", cascade="all, delete-orphan"
+    )
+
+
+class ProjectTaskAssignee(Base):
+    __tablename__ = "project_task_assignees"
+
+    task_id: Mapped[int] = mapped_column(
+        ForeignKey("project_tasks.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.telegram_id"), primary_key=True)
+
+    task: Mapped[ProjectTask] = relationship(back_populates="assignee_links")
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+
+
+class ProjectTaskTag(Base):
+    __tablename__ = "project_task_tags"
+
+    task_id: Mapped[int] = mapped_column(
+        ForeignKey("project_tasks.id", ondelete="CASCADE"), primary_key=True
+    )
+    tag_id: Mapped[int] = mapped_column(
+        ForeignKey("project_tags.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    task: Mapped[ProjectTask] = relationship(back_populates="tag_links")
+    tag: Mapped[ProjectTag] = relationship()
+
+
+class ProjectDoc(Base):
+    __tablename__ = "project_docs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(200))
+    body_md: Mapped[str] = mapped_column(Text, default="")
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.telegram_id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    project: Mapped[Project] = relationship(back_populates="docs")
+    editor: Mapped[User | None] = relationship(foreign_keys=[updated_by])
+
+
+class ProjectFolder(Base):
+    __tablename__ = "project_folders"
+    __table_args__ = (Index("ix_project_folders_parent", "project_id", "parent_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("project_folders.id", ondelete="CASCADE"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(160))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    allowed_roles: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+    project: Mapped[Project] = relationship(back_populates="folders")
+    parent: Mapped[ProjectFolder | None] = relationship(
+        remote_side="ProjectFolder.id", foreign_keys=[parent_id]
+    )
+
+
+class ProjectFile(Base):
+    __tablename__ = "project_files"
+    __table_args__ = (Index("ix_project_files_folder", "project_id", "folder_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    folder_id: Mapped[int | None] = mapped_column(
+        ForeignKey("project_folders.id", ondelete="CASCADE"), nullable=True
+    )
+    original_name: Mapped[str] = mapped_column(String(255))
+    relative_path: Mapped[str] = mapped_column(String(500), unique=True)
+    content_type: Mapped[str] = mapped_column(String(120))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.telegram_id"))
+    allowed_roles: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    project: Mapped[Project] = relationship(back_populates="files")
+    folder: Mapped[ProjectFolder | None] = relationship(foreign_keys=[folder_id])
+    uploader: Mapped[User] = relationship(foreign_keys=[uploaded_by])
 
 
 class RankDef(Base):

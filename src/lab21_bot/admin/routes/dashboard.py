@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
+from urllib.parse import quote
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
@@ -13,6 +16,7 @@ from lab21_bot.services.periods import (
     parse_period,
     period_since,
 )
+from lab21_bot.services.projects import month_calendar, resolve_month, shift_month
 from lab21_bot.services.stats import dashboard_stats
 from lab21_bot.services.telegram_profile import sync_user_profile
 
@@ -44,6 +48,34 @@ async def dashboard(
 
     stats = await dashboard_stats(session, new_members_since=new_since)
     journal = await recent_journal(session, limit=80, since=since, until=until)
+    today = datetime.now(settings.tz).date()
+    year, month = resolve_month(request.query_params.get("cal"), today)
+    cal_assignee = request.query_params.get("cal_assignee") or ""
+    assignee_id = user.telegram_id if cal_assignee == "me" else None
+    task_calendar = await month_calendar(
+        session,
+        year,
+        month,
+        today=today,
+        assignee_id=assignee_id,
+    )
+    prev_year, prev_month = shift_month(year, month, -1)
+    next_year, next_month = shift_month(year, month, 1)
+
+    def cal_url(cal_year: int, cal_month: int, assignee: str) -> str:
+        parts = [
+            f"new={quote(new_period)}",
+            f"journal_period={quote(journal_period)}",
+            f"cal={cal_year:04d}-{cal_month:02d}",
+        ]
+        if date_from:
+            parts.append(f"from={quote(date_from)}")
+        if date_to:
+            parts.append(f"to={quote(date_to)}")
+        if assignee:
+            parts.append(f"cal_assignee={quote(assignee)}")
+        return "/?" + "&".join(parts)
+
     return await render(
         request,
         "dashboard.html",
@@ -57,4 +89,10 @@ async def dashboard(
         journal_period=journal_period,
         date_from=date_from or "",
         date_to=date_to or "",
+        task_calendar=task_calendar,
+        cal_prev=cal_url(prev_year, prev_month, cal_assignee),
+        cal_next=cal_url(next_year, next_month, cal_assignee),
+        cal_all=cal_url(year, month, ""),
+        cal_mine=cal_url(year, month, "me"),
+        cal_assignee=cal_assignee,
     )

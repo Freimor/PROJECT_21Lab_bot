@@ -10,6 +10,7 @@ from lab21_bot.admin.routes import (
     gamification,
     llm_posts,
     people,
+    projects,
     publications,
     settings,
     shop,
@@ -19,6 +20,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(people.router)
+api_router.include_router(projects.router)
 api_router.include_router(shop.router)
 api_router.include_router(publications.router)
 api_router.include_router(llm_posts.router)

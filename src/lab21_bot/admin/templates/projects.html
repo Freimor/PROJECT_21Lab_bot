@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Проекты — Lab21 Admin{% endblock %}
+{% block content %}
+<h1 class="page-title">Проекты</h1>
+<p class="page-sub">Доска задач, календарь, документы и файлы команды.</p>
+
+<div class="split-layout">
+  <section class="panel">
+    <h2>Новый проект</h2>
+    <form method="post" action="/projects" class="stack">
+      <label>Название <input name="title" required maxlength="200"></label>
+      <label>Описание <textarea name="description" rows="3"></textarea></label>
+      <button type="submit">Создать</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Список</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Проект</th><th>Задачи</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for item in projects %}
+          <tr>
+            <td>
+              <a href="/projects/{{ item.id }}"><strong>{{ item.title }}</strong></a>
+              {% if item.description %}<div class="muted">{{ item.description }}</div>{% endif %}
+            </td>
+            <td>{{ item.task_count }}</td>
+            <td class="actions">
+              <form method="post" action="/projects/{{ item.id }}/delete" onsubmit="return confirm('Удалить проект и его файлы?')">
+                <button type="submit" class="danger">Удалить</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="muted">Проектов пока нет</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/admin.css?v=20260814b">
+  <link rel="stylesheet" href="/static/admin.css?v=20260925a">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
 <body>
@@ -24,6 +24,9 @@
         <span class="nav-badge" title="Заявки: сотрудники | участники">+{{ badges.join_staff }}|+{{ badges.join_community }}</span>
         {% endif %}
       </a>
+      {% if nav.can_projects %}
+      <a href="/projects" class="{% if request.url.path.startswith('/projects') %}active{% endif %}">Проекты</a>
+      {% endif %}
       {% if nav.can_people %}
       <a href="/community" class="{% if request.url.path.startswith('/community') or request.url.path.startswith('/people') %}active{% endif %}">
         Комьюнити

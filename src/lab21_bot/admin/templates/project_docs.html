@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "projects_nav.html" import project_tabs %}
+{% block title %}{{ project.title }} — Документы{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ project.title }}</h1>
+{{ project_tabs(project, 'docs') }}
+
+<div class="split-layout">
+  <section class="panel">
+    <h2>Страницы</h2>
+    <ul class="doc-list">
+      {% for doc in docs %}
+      <li>
+        <a href="/projects/{{ project.id }}/docs/{{ doc.id }}" class="{% if current and current.id == doc.id %}active{% endif %}">{{ doc.title }}</a>
+      </li>
+      {% else %}
+      <li class="muted">Документов пока нет</li>
+      {% endfor %}
+    </ul>
+  </section>
+  <section class="panel">
+    {% if current %}
+    <h2>Редактор</h2>
+    {% if doc_html %}
+    <div class="md-body">{{ doc_html | safe }}</div>
+    {% endif %}
+    <form method="post" action="/projects/{{ project.id }}/docs/{{ current.id }}" class="stack">
+      <label>Название <input name="title" required maxlength="200" value="{{ current.title }}"></label>
+      <label>Markdown
+        <textarea name="body_md" class="md-editor" rows="16">{{ current.body_md }}</textarea>
+      </label>
+      <p class="muted">Предпросмотр обновляется после сохранения. HTML из текста вырезается.</p>
+      <div class="actions">
+        <button type="submit">Сохранить</button>
+      </div>
+    </form>
+    <form method="post" action="/projects/{{ project.id }}/docs/{{ current.id }}/delete">
+      <button type="submit" class="danger">Удалить документ</button>
+    </form>
+    {% else %}
+    <h2>Новый документ</h2>
+    <form method="post" action="/projects/{{ project.id }}/docs" class="stack">
+      <label>Название <input name="title" required maxlength="200"></label>
+      <label>Markdown
+        <textarea name="body_md" class="md-editor" rows="16" placeholder="# Заголовок"></textarea>
+      </label>
+      <p class="muted">Предпросмотр появится после сохранения.</p>
+      <button type="submit">Создать</button>
+    </form>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

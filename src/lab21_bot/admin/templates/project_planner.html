@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "projects_nav.html" import project_tabs, filter_form, task_dialogs %}
+{% block title %}{{ project.title }} — Планировщик{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ project.title }}</h1>
+{{ project_tabs(project, 'planner') }}
+{{ filter_form('/projects/' ~ project.id ~ '/planner', staff, board.tags, assignee, tag, '%04d-%02d'|format(task_calendar.year, task_calendar.month)) }}
+{% include "project_calendar.html" %}
+{{ task_dialogs(project, board.columns, staff, board.tags, board.tasks, link_options) }}
+<script>
+(function () {
+  function openDialog(id) {
+    const dialog = document.getElementById(id);
+    if (!dialog) return;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  }
+  function closeDialog(dialog) {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  }
+  document.querySelectorAll("dialog.modal").forEach((dialog) => {
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) closeDialog(dialog);
+    });
+    dialog.querySelectorAll("[data-close-dialog]").forEach((btn) => {
+      btn.addEventListener("click", () => closeDialog(dialog));
+    });
+  });
+  function openFromHash() {
+    const match = (location.hash || "").match(/^#task-(\d+)$/);
+    if (match) openDialog("task-dialog-" + match[1]);
+  }
+  document.querySelectorAll(".cal-chip").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const href = link.getAttribute("href") || "";
+      if (!href.startsWith("#task-")) return;
+      event.preventDefault();
+      history.replaceState(null, "", href);
+      openDialog(href.slice(1).replace("task-", "task-dialog-"));
+    });
+  });
+  openFromHash();
+})();
+</script>
+{% endblock %}

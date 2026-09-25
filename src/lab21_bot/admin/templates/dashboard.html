@@ -25,6 +25,12 @@
   <div class="stat"><div class="label">На модерации</div><div class="value">{{ stats.content_moderation }}</div></div>
 </div>
 
+<div class="period-pills dash-cal-filter">
+  <a class="{% if not cal_assignee %}active{% endif %}" href="{{ cal_all }}">Все задачи</a>
+  <a class="{% if cal_assignee == 'me' %}active{% endif %}" href="{{ cal_mine }}">Мои</a>
+</div>
+{% include "project_calendar.html" %}
+
 <div class="panel">
   <div class="panel-head">
     <h2>Журнал</h2>

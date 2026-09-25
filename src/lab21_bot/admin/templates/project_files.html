@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% from "projects_nav.html" import project_tabs, role_checks with context %}
+{% block title %}{{ project.title }} — Файлы{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ project.title }}</h1>
+{{ project_tabs(project, 'files') }}
+
+<nav class="crumbs">
+  {% for crumb in page.crumbs %}
+    {% if not loop.last %}
+    <a href="/projects/{{ project.id }}/files{% if crumb.id %}?folder={{ crumb.id }}{% endif %}">{{ crumb.name }}</a>
+    <span class="muted">/</span>
+    {% else %}
+    <strong>{{ crumb.name }}</strong>
+    {% endif %}
+  {% endfor %}
+</nav>
+
+<div class="split-layout">
+  <section class="panel">
+    <h2>Загрузить</h2>
+    <form method="post" action="/projects/{{ project.id }}/files/upload" enctype="multipart/form-data" class="stack">
+      {% if page.folder_id %}<input type="hidden" name="folder_id" value="{{ page.folder_id }}">{% endif %}
+      <label>Файл
+        <input type="file" name="upload" required>
+      </label>
+      <fieldset>
+        <legend>Кто может скачать</legend>
+        {{ role_checks([]) }}
+      </fieldset>
+      <button type="submit">Загрузить</button>
+    </form>
+    <h2>Новая папка</h2>
+    <form method="post" action="/projects/{{ project.id }}/folders" class="stack">
+      {% if page.folder_id %}<input type="hidden" name="parent_id" value="{{ page.folder_id }}">{% endif %}
+      <label>Название <input name="name" required maxlength="160"></label>
+      <fieldset>
+        <legend>Кто видит папку</legend>
+        {{ role_checks([]) }}
+      </fieldset>
+      <button type="submit" class="secondary">Создать папку</button>
+    </form>
+    {% if page.folder_id %}
+    <h2>Доступ к этой папке</h2>
+    <form method="post" action="/projects/{{ project.id }}/folders/{{ page.folder_id }}/roles" class="stack">
+      {{ role_checks(page.current_roles) }}
+      <button type="submit" class="secondary">Сохранить доступ</button>
+    </form>
+    <form method="post" action="/projects/{{ project.id }}/folders/{{ page.folder_id }}/delete" onsubmit="return confirm('Удалить папку и всё, что внутри?')">
+      {% set parent = page.crumbs[-2] %}
+      {% if parent.id %}<input type="hidden" name="parent_id" value="{{ parent.id }}">{% endif %}
+      <button type="submit" class="danger">Удалить папку</button>
+    </form>
+    {% endif %}
+  </section>
+  <section class="panel">
+    <h2>Содержимое</h2>
+    {% if page.folders %}
+    <ul class="doc-list">
+      {% for folder in page.folders %}
+      <li><a href="/projects/{{ project.id }}/files?folder={{ folder.id }}">{{ folder.name }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Файл</th><th>Размер</th><th>Кто загрузил</th><th>Доступ</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for item in page.files %}
+          <tr>
+            <td><a href="/projects/{{ project.id }}/files/{{ item.id }}">{{ item.name }}</a></td>
+            <td class="muted">{{ item.size_label }}</td>
+            <td>{{ item.uploaded_by }}</td>
+            <td>
+              <form method="post" action="/projects/{{ project.id }}/files/{{ item.id }}/roles" class="stack">
+                {% if page.folder_id %}<input type="hidden" name="folder_id" value="{{ page.folder_id }}">{% endif %}
+                {{ role_checks(item.allowed_roles) }}
+                <button type="submit" class="secondary">Сохранить</button>
+              </form>
+            </td>
+            <td class="actions">
+              <form method="post" action="/projects/{{ project.id }}/files/{{ item.id }}/delete">
+                {% if page.folder_id %}<input type="hidden" name="folder_id" value="{{ page.folder_id }}">{% endif %}
+                <button type="submit" class="danger">Удалить</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          {% if not page.folders %}
+          <tr><td colspan="5" class="muted">Папка пустая</td></tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

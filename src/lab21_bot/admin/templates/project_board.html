@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% from "projects_nav.html" import project_tabs, filter_form, task_dialogs %}
+{% block title %}{{ project.title }} — Задачи{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ project.title }}</h1>
+{% if project.description %}<p class="page-sub">{{ project.description }}</p>{% endif %}
+{{ project_tabs(project, 'board') }}
+
+<div class="board-tools">
+  {{ filter_form('/projects/' ~ project.id, staff, board.tags, assignee, tag) }}
+  <button type="button" data-open-dialog="task-create">Новая задача</button>
+</div>
+
+<section class="panel board-tags">
+  <div class="tag-row">
+    {% for item in board.tags %}
+    <form method="post" action="/projects/{{ project.id }}/tags/{{ item.id }}/delete" class="tag-form">
+      <span class="task-tag" style="--tag: {{ item.color }}">{{ item.title }}</span>
+      <button type="submit" class="secondary" title="Удалить тег">×</button>
+    </form>
+    {% endfor %}
+    <form method="post" action="/projects/{{ project.id }}/tags" class="tag-create">
+      <input name="title" maxlength="64" placeholder="Новый тег" required>
+      <input type="color" name="color" value="#6b7c93">
+      <button type="submit" class="secondary">Добавить</button>
+    </form>
+  </div>
+</section>
+
+<div
+  class="board"
+  data-board
+  data-project-id="{{ project.id }}"
+  data-sortable="{% if sortable %}on{% else %}off{% endif %}"
+>
+  {% for column in board.columns %}
+  <section class="board-col">
+    <header class="board-col-head">
+      <form method="post" action="/projects/{{ project.id }}/columns/{{ column.id }}" class="board-col-title">
+        <input name="title" value="{{ column.title }}" maxlength="120" required>
+        <button type="submit" class="secondary">OK</button>
+      </form>
+      <span class="muted">{{ column.tasks|length }}</span>
+      <div class="board-col-actions">
+        <form method="post" action="/projects/{{ project.id }}/columns/{{ column.id }}/shift">
+          <input type="hidden" name="direction" value="-1">
+          <button type="submit" class="secondary" title="Левее">←</button>
+        </form>
+        <form method="post" action="/projects/{{ project.id }}/columns/{{ column.id }}/shift">
+          <input type="hidden" name="direction" value="1">
+          <button type="submit" class="secondary" title="Правее">→</button>
+        </form>
+        <form method="post" action="/projects/{{ project.id }}/columns/{{ column.id }}/delete">
+          <button type="submit" class="danger" title="Удалить колонку">×</button>
+        </form>
+      </div>
+    </header>
+    <div class="board-list" data-column-id="{{ column.id }}">
+      {% for task in column.tasks %}
+      <article class="task-card" data-task-id="{{ task.id }}" style="--card-color: {{ task.color }}">
+        <h3>{{ task.title }}</h3>
+        {% if task.tags %}
+        <div class="task-tags">
+          {% for item in task.tags %}
+          <span class="task-tag" style="--tag: {{ item.color }}">{{ item.title }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if task.start_on or task.due_on %}
+        <p class="muted task-dates">
+          {% if task.start_on %}{{ task.start_on.strftime('%d.%m.%Y') }}{% endif %}
+          {% if task.start_on and task.due_on %} — {% endif %}
+          {% if task.due_on %}{{ task.due_on.strftime('%d.%m.%Y') }}{% endif %}
+        </p>
+        {% endif %}
+        {% if task.link_label %}
+        <p><a href="{{ task.link_href }}">{{ task.link_label }}</a></p>
+        {% endif %}
+        {% if task.assignees %}
+        <div class="task-people">
+          {% for person in task.assignees %}
+          <span class="avatar avatar-fallback" title="{{ person.full_name }}">{{ person.full_name[:1] }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <div class="task-card-actions">
+          <button type="button" class="secondary" data-open-dialog="task-dialog-{{ task.id }}">Открыть</button>
+          <form method="post" action="/projects/{{ project.id }}/tasks/{{ task.id }}/move" class="task-move">
+            <select name="column_id">
+              {% for target in board.columns %}
+              <option value="{{ target.id }}" {% if target.id == column.id %}selected{% endif %}>{{ target.title }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="secondary">Перенести</button>
+          </form>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  <section class="board-col board-col-add">
+    <form method="post" action="/projects/{{ project.id }}/columns" class="stack">
+      <label>Новая колонка <input name="title" maxlength="120" required placeholder="Название"></label>
+      <button type="submit" class="secondary">Добавить</button>
+    </form>
+  </section>
+</div>
+
+{{ task_dialogs(project, board.columns, staff, board.tags, board.tasks, link_options) }}
+<script src="https://unpkg.com/sortablejs@1.15.6/Sortable.min.js"></script>
+<script>
+(function () {
+  function openDialog(id) {
+    const dialog = document.getElementById(id);
+    if (!dialog) return;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  }
+  function closeDialog(dialog) {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  }
+  document.querySelectorAll("[data-open-dialog]").forEach((btn) => {
+    btn.addEventListener("click", () => openDialog(btn.getAttribute("data-open-dialog")));
+  });
+  document.querySelectorAll("dialog.modal").forEach((dialog) => {
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) closeDialog(dialog);
+    });
+    dialog.querySelectorAll("[data-close-dialog]").forEach((btn) => {
+      btn.addEventListener("click", () => closeDialog(dialog));
+    });
+  });
+  function openFromHash() {
+    const match = (location.hash || "").match(/^#task-(\d+)$/);
+    if (match) openDialog("task-dialog-" + match[1]);
+  }
+  window.addEventListener("hashchange", openFromHash);
+  openFromHash();
+
+  const board = document.querySelector("[data-board]");
+  if (!board || board.getAttribute("data-sortable") !== "on" || typeof Sortable === "undefined") return;
+  const projectId = board.getAttribute("data-project-id");
+  async function persist(list) {
+    const body = new URLSearchParams();
+    body.set("column_id", list.getAttribute("data-column-id") || "");
+    list.querySelectorAll("[data-task-id]").forEach((card) => {
+      body.append("task_id", card.getAttribute("data-task-id"));
+    });
+    const response = await fetch("/projects/" + projectId + "/tasks/reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    if (!response.ok) location.reload();
+  }
+  board.querySelectorAll("[data-column-id]").forEach((list) => {
+    Sortable.create(list, {
+      group: "tasks",
+      animation: 150,
+      draggable: "[data-task-id]",
+      filter: "button, a, input, select, textarea, label, form",
+      preventOnFilter: false,
+      onEnd: async (evt) => {
+        await persist(evt.to);
+        if (evt.from !== evt.to) await persist(evt.from);
+      },
+    });
+  });
+})();
+</script>
+{% endblock %}

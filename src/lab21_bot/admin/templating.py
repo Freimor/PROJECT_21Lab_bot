@@ -60,6 +60,7 @@ def nav_flags(user: User) -> dict[str, bool]:
         "can_economy": has_permission(user, Permission.MANAGE_ECONOMY),
         # Any staff can open the section; create/complete still check permissions.
         "can_gamification": is_staff,
+        "can_projects": is_staff,
         "can_settings": has_permission(user, Permission.MANAGE_SETTINGS),
         "can_feedback": is_staff,
     }

@@ -108,17 +108,19 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lab21}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lab21}
       UPLOAD_DIR: /app/uploads
+      PROJECT_FILES_DIR: /app/project_files
     command: ["sh", "-c", "alembic upgrade head && exec lab21-admin"]
     ports:
       # ADMIN_PORT is the in-container bind; publish elsewhere when the host port is taken.
       - "${ADMIN_HOST_PORT:-8080}:${ADMIN_PORT:-8080}"
     volumes:
       - uploads_data:/app/uploads
+      - project_files_data:/app/project_files
     depends_on:
       postgres:
         condition: service_healthy
 
-  # Public HTTPS for the Mini App (profile: https) — Telegram accepts HTTPS only.
+  # Public HTTPS (profile: https) — Mini App and admin. Telegram accepts HTTPS only.
   # Mount Let's Encrypt files from CERTS_DIR (issued via DuckDNS DNS-01 / lego).
   # Forward the router's public 443 → HTTPS_HOST_PORT so Telegram can reach /app.
   caddy:
@@ -143,7 +145,8 @@ services:
 
   # Named Cloudflare Tunnel (profile: tunnel). Cloudflare terminates HTTPS; this
   # process only makes outbound connections. Create the tunnel in Zero Trust, add a
-  # public hostname → http://127.0.0.1:8082, put the token in CLOUDFLARE_TUNNEL_TOKEN.
+  # public hostname (lab21.microelectronics.dev) → http://127.0.0.1:8082, put the
+  # token in CLOUDFLARE_TUNNEL_TOKEN. Caddy then serves both the Mini App and admin.
   cloudflared:
     profiles: ["tunnel"]
     image: cloudflare/cloudflared:latest
@@ -184,5 +187,6 @@ volumes:
   control_data:
   deploy_repo:
   uploads_data:
+  project_files_data:
   caddy_data:
   caddy_config:
