@@ -46,7 +46,7 @@ export default function ProfilePage() {
       {msg && <Card>{msg}</Card>}
       <Card>
         <p>{me.full_name}</p>
-        <p>Ранг: {me.rank}</p>
+        {!me.is_staff && <p>Ранг: {me.rank_label || me.rank}</p>}
         <p>{me.balance} 🙏 · {me.respect} ❇</p>
         <label>О себе</label>
         <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} />
@@ -54,6 +54,33 @@ export default function ProfilePage() {
         <Button variant="secondary" onClick={toggleNotify}>
           Уведомления о заказах: {me.job_notify_enabled ? "вкл" : "выкл"}
         </Button>
+      </Card>
+      <Card>
+        <h3>Режим продаж</h3>
+        {me.sales_mode ? (
+          <p>Рублёвые карточки включены. Чек выдаёшь ты.</p>
+        ) : (
+          <>
+            <p>
+              Рубли на ярмарке — только после самозанятости. Налог 4% с физлица и 6% с юрлица,
+              лимит 2,4 млн ₽ в год, чек в «Мой налог» формируешь сам. Площадка деньги не принимает.
+              Включая режим, подтверждаешь, что тебе есть 18 лет и ты на НПД.
+            </p>
+            <Button
+              onClick={async () => {
+                try {
+                  await api.marketSalesMode();
+                  await refresh();
+                  setMsg("Режим продаж включён");
+                } catch (e) {
+                  setMsg(e instanceof Error ? e.message : "Не получилось");
+                }
+              }}
+            >
+              Включить режим продаж
+            </Button>
+          </>
+        )}
       </Card>
       <Card>
         <h3>Навыки</h3>

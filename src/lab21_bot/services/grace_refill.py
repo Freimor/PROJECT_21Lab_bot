@@ -60,6 +60,8 @@ async def adjust_grace_bounds(
     refilled: list[tuple[User, int]] = []
     decayed: list[tuple[User, int]] = []
     for user in rows:
+        if user.rank is None:
+            continue
         base = rank_base_grace(str(user.rank))
         cap = rank_cap_grace(str(user.rank))
 

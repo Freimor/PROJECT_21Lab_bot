@@ -131,10 +131,11 @@ async def approve_meme_to_collection(
         key = "default"
         try:
             from lab21_bot.services.seasons import active_season
+            from lab21_bot.services.templates import resolve_active_meme_collections
 
             season = await active_season(session)
-            if season is not None and season.meme_collection:
-                key = season.meme_collection
+            chosen = await resolve_active_meme_collections(session, season)
+            key = chosen[0] if len(chosen) == 1 else "default"
         except Exception:
             key = "default"
     template = ContentTemplate(
@@ -258,6 +259,7 @@ async def post_collection_meme_now(
     chat_id: int,
     message_thread_id: int | None,
     fallback_author_id: int,
+    upload_dir: str | None = None,
 ) -> ContentItem:
     """Manually post a collection meme to the flood destination."""
     require_permission(actor, Permission.MANAGE_SETTINGS)
@@ -278,6 +280,7 @@ async def post_collection_meme_now(
             chat_id,
             meme_post_html_from_template(template),
             media=list(template.media or []) or None,
+            upload_dir=upload_dir,
             message_thread_id=message_thread_id,
             parse_mode="HTML",
         )

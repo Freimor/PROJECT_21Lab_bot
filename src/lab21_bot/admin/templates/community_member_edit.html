@@ -6,7 +6,7 @@
 <p class="page-sub">
   {% if member.username %}@{{ member.username }} · {% endif %}ID {{ member.telegram_id }}
 </p>
-{{ community_tabs('members', can_staff=true, can_economy=can_economy) }}
+{{ community_tabs('members', can_staff=can_staff, can_economy=can_economy) }}
 <p><a href="/community/members">← К участникам</a></p>
 
 {% if pending_skills %}
@@ -19,41 +19,168 @@
 </div>
 {% endif %}
 
-<section class="panel" style="max-width:40rem">
-  <h2>Ранг и навыки</h2>
-  <form method="post" action="/community/members/{{ member.telegram_id }}/update" class="stack">
-    <label>Ранг
-      <select name="rank" required>
-        {% for item in ranks %}
-        <option value="{{ item.id }}" {% if member.rank|catalog_key == item.id %}selected{% endif %}>
-          {{ item.label }}
-        </option>
-        {% endfor %}
-      </select>
-    </label>
-
-    <fieldset class="skills-picker" data-skills-picker>
-      <legend>Навыки</legend>
-      <input type="search" class="skills-search" placeholder="Поиск навыка…" autocomplete="off">
-      <div class="scroll-checklist">
-        {% set selected = member.skill_ids or [] %}
-        {% for skill in skills %}
-        <label class="check" data-skill="{{ skill.title|lower }}">
-          <span>
-            {{ skill.title }}
-            {% if skill.requires_validation %}<span class="muted">(валидация)</span>{% endif %}
-          </span>
-          <input type="checkbox" name="skill_ids" value="{{ skill.id }}"
-            {% if skill.id in selected or skill.id in pending_skills %}checked{% endif %}>
-        </label>
-        {% endfor %}
+<div class="resume-grid">
+  <section class="panel">
+    <div class="resume-head">
+      {% if member.avatar_file_id %}
+      <img class="avatar" src="/avatar/{{ member.telegram_id }}" alt="">
+      {% else %}
+      <div class="avatar avatar-fallback">{{ member.full_name[:1] }}</div>
+      {% endif %}
+      <div>
+        <strong>{{ member.full_name }}</strong>
+        <div class="muted">
+          {% if not member.is_active %}Удалён
+          {% elif member.staff_role %}Сотрудник
+          {% elif member.is_approved %}Участник
+          {% else %}Без допуска
+          {% endif %}
+          {% if member.removal_reason %}
+          · {{ removal_reason_labels.get(member.removal_reason.value, member.removal_reason.value) }}
+          {% endif %}
+        </div>
       </div>
-      <p class="muted">Новые навыки с пометкой «валидация» уйдут в заявки, остальные применятся сразу.</p>
-    </fieldset>
-
-    <div class="actions">
-      <button type="submit">Сохранить</button>
     </div>
-  </form>
-</section>
+    <dl class="resume-facts">
+      <dt>Должность</dt>
+      <dd>
+        {% if member.staff_role %}
+        <span class="badge badge-tint" style="--badge:{{ role_colors.get(member.staff_role|catalog_key, '#6b7c93') }}">{{ role_labels.get(member.staff_role|catalog_key, member.staff_role|catalog_key) }}</span>
+        {% else %}—{% endif %}
+      </dd>
+      {% if not member.staff_role %}
+      <dt>Ранг</dt>
+      <dd><span class="badge badge-tint" style="--badge:{{ rank_colors.get(member.rank|catalog_key, '#a89878') }}">{{ rank_labels.get(member.rank|catalog_key, member.rank|catalog_key) }}</span></dd>
+      {% endif %}
+      <dt>Благодать</dt>
+      <dd>{{ member.balance }}</dd>
+      <dt>Респект</dt>
+      <dd>{{ member.respect }}</dd>
+      <dt>Навыки</dt>
+      <dd>
+        {% if member.skill_ids %}
+        <div class="skill-chips">
+          {% for sid in member.skill_ids %}
+          <span class="badge">{{ skill_titles.get(sid, sid) }}</span>
+          {% endfor %}
+        </div>
+        {% else %}—{% endif %}
+      </dd>
+      <dt>О себе</dt>
+      <dd>{{ member.bio or "—" }}</dd>
+      <dt>Продажи</dt>
+      <dd>{% if member.sales_mode %}режим самозанятого включён{% else %}только благодать{% endif %}</dd>
+      <dt>Заказы</dt>
+      <dd>{% if member.job_notify_enabled %}открыт к новым{% else %}без уведомлений{% endif %}</dd>
+      <dt>Приклонения</dt>
+      <dd>{{ member.ritual_streak }} подряд</dd>
+      <dt>В боте с</dt>
+      <dd>{% if member.started_at %}{{ member.started_at.strftime('%d.%m.%Y') }}{% else %}—{% endif %}</dd>
+      {% if member.testuser_active %}
+      <dt>Миниапп</dt>
+      <dd>сейчас открыт как тестовый участник</dd>
+      {% endif %}
+    </dl>
+  </section>
+
+  <div class="resume-actions">
+    {% if can_staff %}
+    <section class="panel">
+      <h2>Должность</h2>
+      <form method="post" action="/community/set-role" class="stack">
+        <input type="hidden" name="target_query" value="{{ member.telegram_id }}">
+        <label>Роль сотрудника
+          <select name="role">
+            {% for role_id in assignable_roles %}
+            <option value="{{ role_id }}" {% if member.staff_role|catalog_key == role_id %}selected{% endif %}>
+              {{ role_labels.get(role_id, role_id) }}
+            </option>
+            {% endfor %}
+            <option value="none" {% if not member.staff_role %}selected{% endif %}>Снять должность</option>
+          </select>
+        </label>
+        <p class="muted">Повышение и понижение. Сотрудник не покупает в магазине и на маркете.</p>
+        <button type="submit">Сохранить должность</button>
+      </form>
+      {% if member.staff_role %}
+      <form method="post" action="/community/staff/{{ member.telegram_id }}/testuser" style="margin-top:0.75rem">
+        <input type="hidden" name="allowed" value="{{ '0' if member.can_use_testuser else '1' }}">
+        <button type="submit" class="secondary">
+          {{ 'Закрыть /testuser' if member.can_use_testuser else 'Разрешить /testuser' }}
+        </button>
+        <p class="muted">Команда в личке бота переключает миниапп этого сотрудника на тестового участника.</p>
+      </form>
+      {% endif %}
+    </section>
+
+    {% if not member.staff_role and member.is_approved and member.is_active %}
+    <section class="panel">
+      <h2>Ранг и навыки</h2>
+      <form method="post" action="/community/members/{{ member.telegram_id }}/update" class="stack">
+        <label>Ранг
+          <select name="rank" required>
+            {% for item in ranks %}
+            <option value="{{ item.id }}" {% if member.rank|catalog_key == item.id %}selected{% endif %}>
+              {{ item.label }}
+            </option>
+            {% endfor %}
+          </select>
+        </label>
+        <fieldset class="skills-picker" data-skills-picker>
+          <legend>Навыки в профиле</legend>
+          <input type="search" class="skills-search" placeholder="Поиск навыка…" autocomplete="off">
+          <div class="scroll-checklist">
+            {% set selected = member.skill_ids or [] %}
+            {% for skill in skills %}
+            <label class="check" data-skill="{{ skill.title|lower }}">
+              <span>
+                {{ skill.title }}
+                {% if skill.requires_validation %}<span class="muted">(валидация)</span>{% endif %}
+              </span>
+              <input type="checkbox" name="skill_ids" value="{{ skill.id }}"
+                {% if skill.id in selected or skill.id in pending_skills %}checked{% endif %}>
+            </label>
+            {% endfor %}
+          </div>
+          <p class="muted">Навык с пометкой «валидация» уйдёт в заявки. Остальные появятся в профиле сразу.</p>
+        </fieldset>
+        <button type="submit">Сохранить профиль</button>
+      </form>
+    </section>
+    {% endif %}
+
+    {% if member.is_active and member.telegram_id != user.telegram_id %}
+    <section class="panel">
+      <h2>Удаление</h2>
+      <p class="muted">Человек потеряет доступ к боту и миниаппу.</p>
+      <a class="btn danger" href="/community/{{ member.telegram_id }}/remove">Удалить</a>
+    </section>
+    {% endif %}
+    {% endif %}
+
+    {% if can_economy and not member.staff_role %}
+    <section class="panel">
+      <h2>Благодать и респект</h2>
+      <form method="post" action="/community/{{ member.telegram_id }}/adjust" class="stack">
+        <label>Валюта
+          <select name="currency">
+            <option value="grace">Благодать</option>
+            <option value="respect">Респект</option>
+          </select>
+        </label>
+        <label>Сумма
+          <input type="number" name="amount" min="1" required>
+        </label>
+        <label>Причина
+          <input name="reason" maxlength="500" placeholder="зачем">
+        </label>
+        <div class="actions">
+          <button type="submit" name="action" value="grant">Начислить</button>
+          <button type="submit" name="action" value="withdraw" class="danger">Списать</button>
+        </div>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

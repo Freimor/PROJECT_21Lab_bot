@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Annotated
 
@@ -49,9 +50,15 @@ from lab21_bot.services.seasons import (
 from lab21_bot.services.settings import SettingError, get_int_setting, set_int_setting
 from lab21_bot.services.templates import MemeCollectionInfo, list_meme_collections
 from lab21_bot.services.uploads import UploadError, save_quest_image
-from lab21_bot.telegram_client import create_bot
+from lab21_bot.telegram_client import (
+    _candidate_proxies,
+    create_bot,
+    is_telegram_transport_error,
+    remember_proxy,
+)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _GAME_SETTING_KEYS = (
     "ritual_grace",
@@ -125,23 +132,43 @@ async def _sync_quest_post(
 ) -> None:
     if not quest.chat_id or not quest.message_id:
         return
-    bot = _bot(settings)
-    try:
-        dest = destination_for_kind(settings, ContentKind.IMPORTANT)
-        await sync_quest_telegram_post(
-            bot,
-            quest,
-            members,
-            upload_dir=settings.upload_dir,
-            message_thread_id=dest.thread_id,
-            completed=completed,
-            was_image=was_image,
-            media_changed=media_changed,
-        )
-    except (TelegramAPIError, DestinationError) as exc:
-        raise QuestError("Не удалось обновить пост в Telegram") from exc
-    finally:
-        await bot.session.close()
+    last_transport: BaseException | None = None
+    for proxy in _candidate_proxies(settings):
+        bot = create_bot(settings, proxy=proxy)
+        try:
+            dest = destination_for_kind(settings, ContentKind.IMPORTANT)
+            await sync_quest_telegram_post(
+                bot,
+                quest,
+                members,
+                upload_dir=settings.upload_dir,
+                message_thread_id=dest.thread_id,
+                completed=completed,
+                was_image=was_image,
+                media_changed=media_changed,
+            )
+        except QuestError:
+            raise
+        except DestinationError as exc:
+            raise QuestError("Не удалось обновить пост в Telegram") from exc
+        except TelegramAPIError as exc:
+            if is_telegram_transport_error(exc):
+                last_transport = exc
+                logger.warning("quest post sync transport error via %s: %s", proxy, exc)
+                continue
+            raise QuestError("Не удалось обновить пост в Telegram") from exc
+        except Exception as exc:
+            if is_telegram_transport_error(exc):
+                last_transport = exc
+                logger.warning("quest post sync transport error via %s: %s", proxy, exc)
+                continue
+            raise
+        else:
+            remember_proxy(proxy)
+            return
+        finally:
+            await bot.session.close()
+    raise QuestError("Не удалось обновить пост в Telegram") from last_transport
 
 
 @router.get("/gamification", response_class=HTMLResponse)
@@ -422,6 +449,7 @@ async def gamification_quest_complete(
             )
         )
     except QuestError as exc:
+        await session.rollback()
         return _redirect(f"/gamification/quests/{quest_id}", error=str(exc))
     return _redirect(message="Квест+завершён")
 

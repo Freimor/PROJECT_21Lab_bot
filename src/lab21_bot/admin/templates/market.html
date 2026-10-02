@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Ярмарка — Lab21 Admin{% endblock %}
+{% block content %}
+<h1 class="page-title">Ярмарка</h1>
+<p class="page-sub">Карточки изделий, склад 21Lab, выдача по коду и споры.</p>
+
+{% if can_moderate %}
+<div class="panel">
+  <h2>Карточка лаборатории</h2>
+  <form method="post" action="/market/lab" enctype="multipart/form-data" class="form-grid">
+    <label>Тема<input name="title" required></label>
+    <label>Категория
+      <select name="category">
+        {% for key, label in categories.items() %}
+        <option value="{{ key }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Цена<input type="number" name="price" min="1" required></label>
+    <label>Валюта
+      <select name="currency">
+        <option value="grace">Благодать</option>
+        <option value="rub">Рубли</option>
+      </select>
+    </label>
+    <label class="span-all">Теги через запятую<input name="tags" placeholder="DCDC, IoT"></label>
+    <label class="span-all">Кратко<input name="summary" required></label>
+    <label class="span-all">Полное описание<textarea name="description" rows="4" required></textarea></label>
+    <label>Фото<input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+    <button type="submit">Создать карточку 21Lab</button>
+  </form>
+</div>
+{% endif %}
+
+{% if can_warehouse %}
+<div class="panel">
+  <h2>Выдача</h2>
+  <form method="post" action="/market/lookup" class="form-grid">
+    <label>Код с QR<input name="token" value="{{ lookup_token or '' }}" required autocomplete="off"></label>
+    <button type="submit">Найти заказ</button>
+  </form>
+  {% if preview %}
+  <p>
+    {{ preview.listing.title if preview.listing else "Изделие" }}
+    · {{ preview.quantity }} шт.
+    · {{ preview.unit_price }}
+    · {{ preview.buyer.full_name if preview.buyer else preview.buyer_id }}
+    · {{ preview.status.value if preview.status.value is defined else preview.status }}
+  </p>
+  {% if preview.status.value == "reserved" or preview.status == "reserved" %}
+  <form method="post" action="/market/issue">
+    <input type="hidden" name="token" value="{{ preview.qr_token }}">
+    <button type="submit">Подтвердить выдачу</button>
+  </form>
+  <form method="post" action="/market/refuse">
+    <input type="hidden" name="token" value="{{ preview.qr_token }}">
+    <button type="submit">Отказ у стойки</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Карточки</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Тема</th>
+        <th>Автор</th>
+        <th>Цена</th>
+        <th>Склад</th>
+        <th>Резерв</th>
+        <th>Статус</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in listings %}
+      <tr>
+        <td>{{ item.title }}</td>
+        <td>{{ item.seller.full_name if item.seller else "21Lab" }}</td>
+        <td>{{ item.price }} {{ "₽" if item.currency.value == "rub" else "🙏" }}</td>
+        <td>{{ item.stock }}</td>
+        <td>{{ item.reserved }}</td>
+        <td>{{ item.status.value }} / {{ item.collection_phase.value }}</td>
+        <td>
+          {% if can_warehouse and item.status.value == "active" %}
+          <form method="post" action="/market/{{ item.id }}/stock">
+            <input type="number" name="quantity" min="1" value="1" style="width:5rem">
+            <button type="submit">Пополнить склад</button>
+          </form>
+          {% endif %}
+          {% if can_moderate and item.status.value == "active" %}
+          <form method="post" action="/market/{{ item.id }}/remove">
+            <input name="reason" placeholder="Причина" required>
+            <button type="submit">Снять</button>
+          </form>
+          {% endif %}
+          {% if item.removal_reason %}<span class="muted">{{ item.removal_reason }}</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7">Карточек пока нет</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if can_disputes %}
+<div class="panel">
+  <h2>Споры</h2>
+  {% if disputes %}
+  <table>
+    <thead>
+      <tr><th>Заказ</th><th>Изделие</th><th>Текст</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for deal in disputes %}
+      <tr>
+        <td>#{{ deal.id }}</td>
+        <td>{{ deal.listing.title if deal.listing else deal.listing_id }} · {{ deal.quantity }} шт.</td>
+        <td>{{ deal.dispute_text }}</td>
+        <td>
+          <form method="post" action="/market/deals/{{ deal.id }}/resolve">
+            <button type="submit" name="action" value="keep">Закрыть без условий</button>
+            <button type="submit" name="action" value="return">Вернуть на склад</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Открытых споров нет.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

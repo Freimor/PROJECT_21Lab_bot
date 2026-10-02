@@ -6,32 +6,46 @@
     <div class="login-brand">
       <img class="login-logo" src="/static/lab21-logo.png?v=2" alt="Lab21" width="147" height="106">
     </div>
-    <p>Вход для сотрудников</p>
     {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
 
-    {% if telegram_login_available %}
-    <script async src="https://telegram.org/js/telegram-widget.js?22"
-      data-telegram-login="{{ bot_username }}"
-      data-size="large"
-      data-auth-url="{{ admin_base_url.rstrip('/') }}/auth/telegram"
-      data-request-access="write"></script>
-    {% elif bot_username %}
-    <p class="muted">Telegram Login недоступен на localhost — нужен публичный HTTPS-домен в BotFather. Сейчас используйте пароль ниже.</p>
+    {% if telegram_bot_id %}
+    <button type="button" id="tg-login" style="width:100%">Войти через Telegram</button>
+    <p class="muted">P.S. Логин пройдет только у зарегистрированных пользователей</p>
+    <p id="tg-login-hint" class="muted" hidden></p>
+    <script src="https://telegram.org/js/telegram-widget.js?22"></script>
+    <script>
+      document.getElementById("tg-login").addEventListener("click", function () {
+        var button = this;
+        var hint = document.getElementById("tg-login-hint");
+        if (!window.Telegram || !Telegram.Login) {
+          hint.hidden = false;
+          hint.textContent = "Не удалось открыть Telegram. Обновите страницу.";
+          return;
+        }
+        button.disabled = true;
+        hint.hidden = false;
+        hint.textContent = "Подтвердите вход в открывшемся окне Telegram.";
+        Telegram.Login.auth(
+          { bot_id: {{ telegram_bot_id }}, lang: "ru" },
+          function (data) {
+            button.disabled = false;
+            if (!data) {
+              hint.textContent = "Вход отменён.";
+              return;
+            }
+            var params = new URLSearchParams();
+            Object.keys(data).forEach(function (key) {
+              if (data[key] !== undefined && data[key] !== null && data[key] !== "") {
+                params.set(key, String(data[key]));
+              }
+            });
+            window.location = "/auth/telegram?" + params.toString();
+          }
+        );
+      });
+    </script>
     {% else %}
-    <p class="muted">Укажите <code>TELEGRAM_BOT_USERNAME</code> в `.env`, чтобы включить Telegram Login на публичном домене.</p>
-    {% endif %}
-
-    {% if password_enabled %}
-    {% if telegram_login_available %}<div class="divider">или пароль</div>{% endif %}
-    <form method="post" action="/auth/password" class="form-grid" style="grid-template-columns:1fr">
-      <label>Telegram ID
-        <input type="number" name="telegram_id" required value="{{ bootstrap_magister_id }}">
-      </label>
-      <label>Пароль админки
-        <input type="password" name="password" required autocomplete="current-password">
-      </label>
-      <button type="submit">Войти</button>
-    </form>
+    <p class="muted">Вход через Telegram недоступен: у бота нет числового id.</p>
     {% endif %}
   </div>
 </div>

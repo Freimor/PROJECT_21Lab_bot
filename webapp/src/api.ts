@@ -11,11 +11,40 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  const payload = await response.json().catch(() => ({}));
+  const text = await response.text();
+  let payload: { detail?: unknown; error?: unknown } = {};
+  if (text) {
+    try {
+      payload = JSON.parse(text) as { detail?: unknown; error?: unknown };
+    } catch {
+      payload = {};
+    }
+  }
   if (!response.ok) {
-    throw new Error(payload.detail ?? payload.error ?? "Ошибка запроса");
+    throw new Error(errorMessage(payload, text));
   }
   return payload as T;
+}
+
+function errorMessage(payload: { detail?: unknown; error?: unknown }, text: string): string {
+  const detail = payload.detail ?? payload.error;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "msg" in item) {
+          const msg = (item as { msg?: unknown }).msg;
+          return typeof msg === "string" ? msg : "";
+        }
+        return "";
+      })
+      .filter(Boolean);
+    if (parts.length) return parts.join("; ");
+  }
+  const plain = text.trim();
+  if (plain && !plain.startsWith("<")) return plain.slice(0, 300);
+  return "Ошибка запроса";
 }
 
 export type Me = {
@@ -26,11 +55,17 @@ export type Me = {
   balance: number;
   respect: number;
   rank: string;
+  rank_label?: string | null;
   skill_ids: string[];
   skills: { id: string; title: string }[];
   job_notify_enabled: boolean;
+  sales_mode: boolean;
+  market_intro_seen: boolean;
+  ritual_streak?: number;
+  bowed_today?: boolean;
   is_approved: boolean;
   is_staff: boolean;
+  is_test_user?: boolean;
   permissions: string[];
   join: { state: string; application?: Record<string, unknown> };
   publications_count?: number;
@@ -56,6 +91,54 @@ export const api = {
       body: JSON.stringify({ product_id, quantity }),
     }),
   shopOrders: () => request<{ orders: Order[] }>("/shop/orders"),
+  marketMeta: () =>
+    request<{
+      categories: { id: string; title: string }[];
+      intro: string;
+      sales_mode_text: string;
+    }>("/market/meta"),
+  marketListings: (category?: string) =>
+    request<{ listings: MarketListing[] }>(
+      category ? `/market/listings?category=${encodeURIComponent(category)}` : "/market/listings",
+    ),
+  marketListing: (id: number) => request<MarketListing>(`/market/listings/${id}`),
+  marketMine: () => request<{ listings: MarketListing[] }>("/market/mine"),
+  marketCreate: (body: MarketListingInput) =>
+    request<MarketListing>("/market/listings", { method: "POST", body: JSON.stringify(body) }),
+  marketUpdate: (id: number, body: Partial<MarketListingInput>) =>
+    request<MarketListing>(`/market/listings/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  marketPhoto: (id: number, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<MarketListing>(`/market/listings/${id}/photos`, { method: "POST", body: form });
+  },
+  marketJoin: (id: number) =>
+    request<MarketListing>(`/market/listings/${id}/join`, { method: "POST", body: "{}" }),
+  marketLeave: (id: number) =>
+    request<MarketListing>(`/market/listings/${id}/leave`, { method: "POST", body: "{}" }),
+  marketHandover: (id: number, handover_on: string) =>
+    request<MarketListing>(`/market/listings/${id}/handover`, {
+      method: "POST",
+      body: JSON.stringify({ handover_on }),
+    }),
+  marketBuy: (id: number, quantity: number) =>
+    request<MarketDeal>(`/market/listings/${id}/buy`, {
+      method: "POST",
+      body: JSON.stringify({ quantity }),
+    }),
+  marketDeals: () => request<{ purchases: MarketDeal[]; sales: MarketDeal[] }>("/market/deals"),
+  marketRefuse: (id: number) =>
+    request(`/market/deals/${id}/refuse`, { method: "POST", body: "{}" }),
+  marketDispute: (id: number, text: string) =>
+    request(`/market/deals/${id}/dispute`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  marketIntro: () => request("/market/intro", { method: "POST", body: "{}" }),
+  marketSalesMode: () => request("/market/sales-mode", { method: "POST", body: "{}" }),
   createJob: (body: {
     description: string;
     skill_ids: string[];
@@ -154,6 +237,60 @@ export type Product = {
   kind: string;
 };
 
+export type MarketListing = {
+  id: number;
+  title: string;
+  category: string;
+  category_label: string;
+  tags: string[];
+  summary: string;
+  description: string;
+  photos: string[];
+  kind: "regular" | "collective";
+  currency: "grace" | "rub";
+  price: number;
+  price_label: string;
+  stock: number;
+  available: number;
+  author: string;
+  is_lab: boolean;
+  seller_id: number | null;
+  status: string;
+  phase: string;
+  batch_threshold: number | null;
+  collection_ends_on: string | null;
+  handover_on: string | null;
+  pledge_count: number;
+  joined: boolean;
+  buyable: boolean;
+  joinable: boolean;
+};
+
+export type MarketListingInput = {
+  title: string;
+  summary: string;
+  description: string;
+  category: string;
+  tags: string[];
+  currency: "grace" | "rub";
+  price: number;
+  kind: "regular" | "collective";
+  batch_threshold?: number | null;
+  collection_ends_on?: string | null;
+};
+
+export type MarketDeal = {
+  id: number;
+  listing_id: number;
+  title: string;
+  quantity: number;
+  price_label: string;
+  status: string;
+  qr_token?: string | null;
+  qr_svg?: string | null;
+  dispute_text?: string | null;
+};
+
 export type Order = {
   id: number;
   product_name?: string;
@@ -192,6 +329,7 @@ export type Quest = {
   description: string;
   status: string;
   reward: number;
+  respect_reward?: number;
   joined?: boolean;
 };
 

@@ -33,6 +33,7 @@ from lab21_bot.services.projects import (
     read_stored_file,
     save_doc,
     store_file,
+    year_timeline,
 )
 from lab21_bot.services.uploads import UploadError
 
@@ -134,6 +135,34 @@ async def test_calendar_shows_task_on_each_day_of_range(session: AsyncSession) -
     assert by_day[2] == ["Лампа"]
     assert by_day[3] == ["Лампа"]
     assert by_day[4] == []
+
+
+async def test_year_timeline_places_task_on_its_span(session: AsyncSession) -> None:
+    actor = _user(1, "Лорд", StaffRole.LORD)
+    session.add(actor)
+    await session.flush()
+    project = await create_project(session, actor, "Лаба", "")
+    columns = await _columns(session, project.id)
+    await create_task(
+        session,
+        actor,
+        project.id,
+        _task(columns[0].id, start_on=date(2026, 8, 13), due_on=date(2026, 8, 15)),
+    )
+    timeline = await year_timeline(session, 2026, today=date(2026, 9, 25))
+    assert timeline.today_pct is not None
+    assert [row.title for row in timeline.rows] == ["Лампа"]
+    row = timeline.rows[0]
+    assert row.starts_on == date(2026, 8, 13)
+    assert row.ends_on == date(2026, 8, 15)
+    assert row.state == "past"
+    assert row.project_title == "Лаба"
+    assert timeline.months[7].label == "авг"
+    assert row.left >= timeline.months[7].left
+    assert row.left < timeline.months[8].left
+    empty = await year_timeline(session, 2025, today=date(2026, 9, 25))
+    assert empty.rows == []
+    assert empty.today_pct is None
 
 
 async def test_doc_markdown_strips_raw_html(session: AsyncSession) -> None:
@@ -270,6 +299,7 @@ async def test_project_pages_render(tmp_path, monkeypatch: pytest.MonkeyPatch) -
         docs = await client.get(f"/projects/{project_id}/docs")
         files = await client.get(f"/projects/{project_id}/files?folder={folder_id}")
         home = await client.get("/")
+        projects_index = await client.get("/projects", follow_redirects=False)
     await engine.dispose()
     assert board.status_code == 200
     assert "Бэклог" in board.text
@@ -282,4 +312,9 @@ async def test_project_pages_render(tmp_path, monkeypatch: pytest.MonkeyPatch) -
     assert "Чертежи" in files.text
     assert home.status_code == 200
     assert "Лампа" in home.text
-    assert "Пн" in home.text
+    assert "Карта года" in home.text
+    assert "янв" in home.text
+    assert projects_index.status_code == 303
+    assert projects_index.headers["location"].endswith(f"/projects/{project_id}")
+    assert "Бэклог" in board.text
+    assert 'class="board"' in board.text

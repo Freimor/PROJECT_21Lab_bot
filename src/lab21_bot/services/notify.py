@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import structlog
 
+from lab21_bot.services.uploads import UploadError, read_uploaded_file
 from lab21_bot.telegram_client import TELEGRAM_API, telegram_request
 
 logger = structlog.get_logger(__name__)
@@ -61,6 +63,7 @@ async def send_telegram_message(
     media: list[dict[str, Any]] | None = None,
     message_thread_id: int | None = None,
     parse_mode: str | None = None,
+    upload_dir: str | Path | None = None,
 ) -> int:
     """Send text (and optional single media) to a chat/topic; return message_id."""
     thread = _thread_fields(message_thread_id)
@@ -92,16 +95,31 @@ async def send_telegram_message(
         "sendVideo": "video",
         "sendDocument": "document",
     }[method]
+    form: dict[str, Any] = {
+        "chat_id": chat_id,
+        **thread,
+        **({"caption": caption, **mode} if caption else {}),
+    }
+    file_id = first.get("file_id")
+    files = None
+    if file_id:
+        form[field] = file_id
+    else:
+        relative = first.get("path")
+        if not isinstance(relative, str) or not relative.strip() or upload_dir is None:
+            raise TelegramSendError("У медиа нет файла")
+        try:
+            content, content_type = read_uploaded_file(upload_dir, relative)
+        except UploadError as exc:
+            raise TelegramSendError(str(exc)) from exc
+        files = {field: (Path(relative).name, content, content_type)}
     response = await telegram_request(
         "post",
         f"{TELEGRAM_API}/bot{bot_token}/{method}",
         request_timeout=40.0,
-        json={
-            "chat_id": chat_id,
-            field: first["file_id"],
-            **thread,
-            **({"caption": caption, **mode} if caption else {}),
-        },
+        data=form if files is not None else None,
+        json=None if files is not None else form,
+        files=files,
     )
     payload = response.json()
     if not payload.get("ok"):

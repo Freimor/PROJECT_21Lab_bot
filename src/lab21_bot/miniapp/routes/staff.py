@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from lab21_bot.data import setting_default
@@ -32,7 +32,7 @@ StaffUser = Annotated[object, ...]  # placeholder replaced below
 @router.get("/dashboard")
 async def staff_dashboard(session: DbSession, user: MiniAppUser) -> dict:
     if user.staff_role is None:
-        return {"error": "forbidden"}
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
     pending_apps = await list_pending_applications(session)
     queue = await list_moderation_queue(session, limit=20)
     orders = await list_orders(session, status=OrderStatus.PENDING, limit=20)

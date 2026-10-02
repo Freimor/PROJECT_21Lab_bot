@@ -7,8 +7,18 @@
 {{ project_tabs(project, 'board') }}
 
 <div class="board-tools">
+  <label class="project-pick">Проект
+    <select onchange="if (this.value) location.href = this.value">
+      {% for item in projects %}
+      <option value="/projects/{{ item.id }}" {% if item.id == project.id %}selected{% endif %}>{{ item.title }}</option>
+      {% endfor %}
+    </select>
+  </label>
   {{ filter_form('/projects/' ~ project.id, staff, board.tags, assignee, tag) }}
-  <button type="button" data-open-dialog="task-create">Новая задача</button>
+  <div class="actions">
+    <button type="button" class="secondary" data-open-dialog="project-create">Новый проект</button>
+    <button type="button" data-open-dialog="task-create">Новая задача</button>
+  </div>
 </div>
 
 <section class="panel board-tags">
@@ -107,6 +117,19 @@
   </section>
 </div>
 
+<dialog id="project-create" class="modal">
+  <form method="post" action="/projects" class="modal-card">
+    <h2 class="modal-title">Новый проект</h2>
+    <div class="stack">
+      <label>Название <input name="title" required maxlength="200"></label>
+      <label>Описание <textarea name="description" rows="3"></textarea></label>
+    </div>
+    <div class="actions modal-actions">
+      <button type="button" class="secondary" data-close-dialog>Отмена</button>
+      <button type="submit">Создать</button>
+    </div>
+  </form>
+</dialog>
 {{ task_dialogs(project, board.columns, staff, board.tags, board.tasks, link_options) }}
 <script src="https://unpkg.com/sortablejs@1.15.6/Sortable.min.js"></script>
 <script>

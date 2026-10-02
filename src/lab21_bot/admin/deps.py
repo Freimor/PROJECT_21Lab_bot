@@ -73,3 +73,6 @@ RequireManageSettings = Annotated[User, Depends(require_perm(Permission.MANAGE_S
 RequireCreateStaffContent = Annotated[
     User, Depends(require_perm(Permission.CREATE_STAFF_CONTENT))
 ]
+RequireFairModerate = Annotated[User, Depends(require_perm(Permission.FAIR_MODERATE))]
+RequireFairWarehouse = Annotated[User, Depends(require_perm(Permission.FAIR_WAREHOUSE))]
+RequireFairDisputes = Annotated[User, Depends(require_perm(Permission.FAIR_DISPUTES))]

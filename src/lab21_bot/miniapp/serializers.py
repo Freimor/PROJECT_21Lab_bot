@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from lab21_bot.data import skill_title
+from lab21_bot.data import rank_label, skill_title
 from lab21_bot.models import (
     ContentItem,
     JoinApplication,
@@ -11,11 +11,15 @@ from lab21_bot.models import (
     User,
 )
 from lab21_bot.services.access import Permission, has_permission
+from lab21_bot.services.testuser import is_test_user
 
 
 def user_to_dict(user: User) -> dict:
     staff_role = user.staff_role.value if hasattr(user.staff_role, "value") else user.staff_role
-    rank = user.rank.value if hasattr(user.rank, "value") else user.rank
+    if staff_role is not None:
+        rank = None
+    else:
+        rank = user.rank.value if hasattr(user.rank, "value") else user.rank
     return {
         "telegram_id": user.telegram_id,
         "username": user.username,
@@ -23,6 +27,7 @@ def user_to_dict(user: User) -> dict:
         "bio": user.bio,
         "staff_role": staff_role,
         "rank": rank,
+        "rank_label": rank_label(str(rank)) if rank else None,
         "balance": user.balance,
         "respect": user.respect,
         "skill_ids": list(user.skill_ids or []),
@@ -31,12 +36,15 @@ def user_to_dict(user: User) -> dict:
             for skill_id in (user.skill_ids or [])
         ],
         "job_notify_enabled": user.job_notify_enabled,
+        "sales_mode": user.sales_mode,
+        "market_intro_seen": user.market_intro_seen,
         "ritual_streak": user.ritual_streak,
         "is_approved": user.is_approved,
         "is_active": user.is_active,
         "registered": True,
         "permissions": [perm.value for perm in Permission if has_permission(user, perm)],
         "is_staff": user.staff_role is not None,
+        "is_test_user": is_test_user(user),
     }
 
 

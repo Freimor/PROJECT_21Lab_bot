@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import secrets
 import time
 from typing import Any
 
@@ -9,7 +10,14 @@ from lab21_bot.config import Settings
 from lab21_bot.models import User
 
 SESSION_USER_KEY = "admin_user_id"
+OTP_SESSION_KEY = "admin_otp"
+OTP_IDENTITY_KEY = "admin_otp_identity"
 AUTH_MAX_AGE_SECONDS = 86400
+OTP_TTL_SECONDS = 300
+OTP_MAX_ATTEMPTS = 5
+OTP_COOLDOWN_SECONDS = 60
+
+_otp_sent_at: dict[int, float] = {}
 
 
 class AuthError(RuntimeError):
@@ -60,6 +68,82 @@ def require_staff_user(user: User | None) -> User:
     if user is None or user.staff_role is None or user.is_active is False:
         raise AuthError("Доступ только для сотрудников со staff_role")
     return user
+
+
+def telegram_bot_id(bot_token: str) -> int | None:
+    bot_id = bot_token.split(":", 1)[0]
+    if not bot_id.isdigit():
+        return None
+    return int(bot_id)
+
+
+def new_login_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def login_code_digest(code: str, telegram_id: int, secret: str) -> str:
+    message = f"{telegram_id}:{code.strip()}".encode()
+    return hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
+
+
+def otp_challenge(telegram_id: int, code: str, secret: str, *, now: int) -> dict[str, int | str]:
+    return {
+        "user_id": telegram_id,
+        "code_hash": login_code_digest(code, telegram_id, secret),
+        "expires": now + OTP_TTL_SECONDS,
+        "attempts": 0,
+    }
+
+
+def otp_cooldown_active(
+    telegram_id: int,
+    now: float,
+    *,
+    cooldown: float = OTP_COOLDOWN_SECONDS,
+) -> bool:
+    last = _otp_sent_at.get(telegram_id)
+    return last is not None and now - last < cooldown
+
+
+def mark_otp_sent(telegram_id: int, now: float) -> None:
+    _otp_sent_at[telegram_id] = now
+
+
+def reset_otp_cooldowns() -> None:
+    _otp_sent_at.clear()
+
+
+def check_login_code(
+    challenge: dict[str, Any] | None,
+    code: str,
+    secret: str,
+    *,
+    now: int,
+) -> tuple[str, dict[str, Any] | None]:
+    """Return (status, challenge). A None challenge means the caller should drop it."""
+    if not challenge or "user_id" not in challenge or "code_hash" not in challenge:
+        return "missing", None
+    try:
+        expires = int(challenge["expires"])
+        attempts = int(challenge["attempts"])
+        telegram_id = int(challenge["user_id"])
+        stored_hash = str(challenge["code_hash"])
+    except (TypeError, ValueError):
+        return "missing", None
+    if attempts >= OTP_MAX_ATTEMPTS:
+        return "locked", None
+    if now > expires:
+        return "expired", None
+
+    attempts += 1
+    expected = login_code_digest(code, telegram_id, secret)
+    if hmac.compare_digest(expected, stored_hash):
+        return "ok", None
+    if attempts >= OTP_MAX_ATTEMPTS:
+        return "locked", None
+    updated = dict(challenge)
+    updated["attempts"] = attempts
+    return "mismatch", updated
 
 
 def password_login_allowed(settings: Settings) -> bool:

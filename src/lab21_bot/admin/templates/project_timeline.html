@@ -1,0 +1,66 @@
+<section class="panel season-map-panel">
+  <div class="season-map-head">
+    <div>
+      <h2>Карта года</h2>
+      <div class="period-pills compact">
+        <a class="{% if not cal_assignee %}active{% endif %}" href="{{ cal_all }}">Все задачи</a>
+        <a class="{% if cal_assignee == 'me' %}active{% endif %}" href="{{ cal_mine }}">Мои</a>
+      </div>
+    </div>
+    <nav class="season-map-years" aria-label="Год карты">
+      <a class="season-map-year-step" href="{{ year_prev }}" title="Предыдущий год">←</a>
+      {% for y in task_timeline.years %}
+      <a class="season-map-year{% if y == task_timeline.year %} is-current{% endif %}" href="{{ year_links[y] }}">{{ y }}</a>
+      {% endfor %}
+      <a class="season-map-year-step" href="{{ year_next }}" title="Следующий год">→</a>
+    </nav>
+  </div>
+
+  <div class="season-map">
+    <div class="season-map-grid">
+      <div class="season-map-corner muted">
+        {% if task_timeline.today_pct is not none %}
+        сегодня {{ task_timeline.today.strftime('%d.%m') }}
+        {% endif %}
+      </div>
+      <div class="season-map-months" aria-hidden="true">
+        {% for m in task_timeline.months %}
+        <span style="left: {{ m.left }}%; width: {{ m.width }}%">{{ m.label }}</span>
+        {% endfor %}
+      </div>
+
+      {% for row in task_timeline.rows %}
+      <div class="season-map-meta is-{{ row.state }}">
+        <a href="{{ row.href }}">{{ row.title }}</a>
+        <span class="muted">
+          {% if row.starts_on == row.ends_on %}
+          {{ row.starts_on.strftime('%d.%m.%y') }}
+          {% elif row.starts_on.year == row.ends_on.year %}
+          {{ row.starts_on.strftime('%d.%m') }}–{{ row.ends_on.strftime('%d.%m.%y') }}
+          {% else %}
+          {{ row.starts_on.strftime('%d.%m.%y') }}–{{ row.ends_on.strftime('%d.%m.%y') }}
+          {% endif %}
+          · {{ row.project_title }}
+          · <a href="{{ row.href }}">открыть</a>
+        </span>
+      </div>
+      <div class="season-map-track">
+        {% for m in task_timeline.months %}
+        <span class="season-map-guide" style="left: {{ m.left }}%; width: {{ m.width }}%"></span>
+        {% endfor %}
+        {% if task_timeline.today_pct is not none %}
+        <span class="season-map-today" style="left: {{ task_timeline.today_pct }}%"></span>
+        {% endif %}
+        <a
+          class="season-map-bar is-{{ row.state }}{% if row.continues_left %} is-wrap-left{% endif %}{% if row.continues_right %} is-wrap-right{% endif %}"
+          href="{{ row.href }}"
+          style="left: {{ row.left }}%; width: {{ row.width }}%; background: {{ row.color }}"
+          title="{{ row.title }} · {{ row.starts_on }} — {{ row.ends_on }}"
+        >{{ row.title }}</a>
+      </div>
+      {% else %}
+      <p class="muted season-map-empty">В {{ task_timeline.year }} задач с датами нет.</p>
+      {% endfor %}
+    </div>
+  </div>
+</section>

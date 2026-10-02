@@ -1,8 +1,17 @@
 from types import SimpleNamespace
 
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from lab21_bot.middlewares import should_delete_command_message
-from lab21_bot.models import FeedbackKind
-from lab21_bot.services.feedback import clean_feedback_text, detect_feedback_kind
+from lab21_bot.models import FeedbackKind, FeedbackReport, FeedbackStatus, StaffRole, User
+from lab21_bot.services.feedback import (
+    FeedbackError,
+    clean_feedback_text,
+    complete_feedback,
+    decide_feedback,
+    detect_feedback_kind,
+)
 
 
 def _command_message(text: str) -> SimpleNamespace:
@@ -24,6 +33,8 @@ def test_detect_feedback_kind() -> None:
 def test_clean_feedback_text_strips_command() -> None:
     assert clean_feedback_text("/bug камера не фокусирует") == "камера не фокусирует"
     assert clean_feedback_text("/upgrade@bot идея") == "идея"
+    assert clean_feedback_text("/bug") == ""
+    assert clean_feedback_text("/bug@lab_bot") == ""
 
 
 def test_keeps_bug_and_upgrade_command_messages() -> None:
@@ -34,3 +45,37 @@ def test_keeps_bug_and_upgrade_command_messages() -> None:
     assert should_delete_command_message(_command_message("/start")) is True
     plain = SimpleNamespace(entities=None, text="просто текст")
     assert should_delete_command_message(plain) is False
+
+
+def _report(*, status: FeedbackStatus = FeedbackStatus.PENDING) -> FeedbackReport:
+    return FeedbackReport(
+        kind=FeedbackKind.BUG,
+        status=status,
+        author_name="Инженер",
+        chat_id=-100,
+        message_id=10,
+        text="камера не фокусирует",
+        media=[],
+    )
+
+
+async def test_complete_feedback_marks_accepted_done(session: AsyncSession) -> None:
+    watcher = User(telegram_id=2, full_name="Смотрящий", staff_role=StaffRole.WATCHER)
+    report = _report()
+    session.add_all([watcher, report])
+    await session.flush()
+    row = await decide_feedback(session, watcher, report.id, accept=True, note="берём")
+    assert row.status is FeedbackStatus.ACCEPTED
+
+    done = await complete_feedback(session, watcher, row.id)
+    assert done.status is FeedbackStatus.DONE
+    assert done.decision_note == "берём"
+
+
+async def test_complete_feedback_requires_accepted(session: AsyncSession) -> None:
+    watcher = User(telegram_id=2, full_name="Смотрящий", staff_role=StaffRole.WATCHER)
+    report = _report()
+    session.add_all([watcher, report])
+    await session.flush()
+    with pytest.raises(FeedbackError, match="принятой"):
+        await complete_feedback(session, watcher, report.id)

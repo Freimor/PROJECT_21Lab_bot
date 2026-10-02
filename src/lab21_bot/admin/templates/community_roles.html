@@ -9,26 +9,6 @@
 <div class="split-layout">
   <section class="panel">
     <h2>Роли</h2>
-    <form method="post" action="/community/roles" class="stack" style="margin-bottom:1.25rem">
-      <label>ID <input name="role_id" required pattern="[a-z][a-z0-9_]{1,62}" placeholder="scribe"></label>
-      <label>Название <input name="label" required maxlength="200"></label>
-      <label>Бейдж <input name="badge" maxlength="64" value="сотрудник"></label>
-      <label>Цвет <input name="color" type="color" value="#6b7c93"></label>
-      <label>Описание <textarea name="description" rows="2"></textarea></label>
-      <label class="check-row" style="flex-direction:row;align-items:center">
-        <input type="checkbox" name="is_unique" value="1"> Уникальная (один носитель)
-      </label>
-      <fieldset class="stack" style="border:0;padding:0;margin:0">
-        <legend class="muted" style="margin-bottom:0.35rem">Права</legend>
-        {% for perm in permission_choices %}
-        <label class="check-row" style="flex-direction:row;align-items:center">
-          <input type="checkbox" name="permissions" value="{{ perm.id }}"> {{ perm.label }}
-        </label>
-        {% endfor %}
-      </fieldset>
-      <button type="submit">Добавить роль</button>
-    </form>
-
     <div class="table-wrap">
       <table>
         <thead>
@@ -43,9 +23,11 @@
         <tbody>
           {% for row in role_rows %}
           {% set role = row.role %}
-          <tr>
+          <tr class="person-row" data-href="/community/roles/{{ role.id }}" onclick="if (!event.target.closest('a,button,form')) location.href=this.dataset.href">
             <td>
-              <span class="badge badge-tint" style="--badge:{{ role.color }}">{{ role.label }}</span>
+              <a href="/community/roles/{{ role.id }}">
+                <span class="badge badge-tint" style="--badge:{{ role.color }}">{{ role.label }}</span>
+              </a>
               <div class="muted">{{ role.id }}</div>
               {% if role.description %}<div class="muted" style="margin-top:0.25rem">{{ role.description }}</div>{% endif %}
             </td>
@@ -53,7 +35,7 @@
             <td>{% if role.is_unique %}да{% else %}—{% endif %}</td>
             <td>{{ row.member_count }}</td>
             <td class="actions">
-              <a class="secondary" href="/community/roles/{{ role.id }}">Редактировать</a>
+              <a class="secondary" href="/community/roles/{{ role.id }}">Изменить</a>
               <form method="post" action="/community/roles/{{ role.id }}/delete" onsubmit="return confirm('Удалить роль «{{ role.label }}»?');">
                 <button type="submit" class="danger">Удалить</button>
               </form>
@@ -65,23 +47,32 @@
         </tbody>
       </table>
     </div>
+    <details class="catalog-add">
+      <summary>Добавить роль</summary>
+      <form method="post" action="/community/roles" class="stack">
+        <label>ID <input name="role_id" required pattern="[a-z][a-z0-9_]{1,62}" placeholder="scribe"></label>
+        <label>Название <input name="label" required maxlength="200"></label>
+        <label>Бейдж <input name="badge" maxlength="64" value="сотрудник"></label>
+        <label>Цвет <input name="color" type="color" value="#6b7c93"></label>
+        <label>Описание <textarea name="description" rows="2"></textarea></label>
+        <label class="check-row" style="flex-direction:row;align-items:center">
+          <input type="checkbox" name="is_unique" value="1"> Уникальная (один носитель)
+        </label>
+        <fieldset class="stack" style="border:0;padding:0;margin:0">
+          <legend class="muted" style="margin-bottom:0.35rem">Права</legend>
+          {% for perm in permission_choices %}
+          <label class="check-row" style="flex-direction:row;align-items:center">
+            <input type="checkbox" name="permissions" value="{{ perm.id }}"> {{ perm.label }}
+          </label>
+          {% endfor %}
+        </fieldset>
+        <button type="submit">Добавить роль</button>
+      </form>
+    </details>
   </section>
 
   <section class="panel">
     <h2>Ранги</h2>
-    <form method="post" action="/community/ranks" class="stack" style="margin-bottom:1.25rem">
-      <label>ID <input name="rank_id" required pattern="[a-z][a-z0-9_]{1,62}" placeholder="initiate"></label>
-      <label>Название <input name="label" required maxlength="200"></label>
-      <label>Уровень <input type="number" name="level" min="0" value="0"></label>
-      <label>Цвет <input name="color" type="color" value="#a89878"></label>
-      <label>База благодати <input type="number" name="base_grace" min="0" value="100"></label>
-      <label>Потолок благодати <input type="number" name="cap_grace" min="0" value="200"></label>
-      <label class="check-row" style="flex-direction:row;align-items:center">
-        <input type="checkbox" name="can_transfer_grace" value="1"> Может переводить благодать
-      </label>
-      <button type="submit">Добавить ранг</button>
-    </form>
-
     <div class="table-wrap">
       <table>
         <thead>
@@ -98,9 +89,11 @@
         <tbody>
           {% for row in rank_rows %}
           {% set rank = row.rank %}
-          <tr>
+          <tr class="person-row" data-href="/community/ranks/{{ rank.id }}" onclick="if (!event.target.closest('a,button,form')) location.href=this.dataset.href">
             <td>
-              <span class="badge badge-tint" style="--badge:{{ rank.color }}">{{ rank.label }}</span>
+              <a href="/community/ranks/{{ rank.id }}">
+                <span class="badge badge-tint" style="--badge:{{ rank.color }}">{{ rank.label }}</span>
+              </a>
               <div class="muted">{{ rank.id }}</div>
             </td>
             <td>{{ rank.level }}</td>
@@ -109,7 +102,7 @@
             <td>{% if rank.can_transfer_grace %}да{% else %}—{% endif %}</td>
             <td>{{ row.member_count }}</td>
             <td class="actions">
-              <a class="secondary" href="/community/ranks/{{ rank.id }}">Редактировать</a>
+              <a class="secondary" href="/community/ranks/{{ rank.id }}">Изменить</a>
               <form method="post" action="/community/ranks/{{ rank.id }}/delete" onsubmit="return confirm('Удалить ранг «{{ rank.label }}»?');">
                 <button type="submit" class="danger">Удалить</button>
               </form>
@@ -121,6 +114,21 @@
         </tbody>
       </table>
     </div>
+    <details class="catalog-add">
+      <summary>Добавить ранг</summary>
+      <form method="post" action="/community/ranks" class="stack">
+        <label>ID <input name="rank_id" required pattern="[a-z][a-z0-9_]{1,62}" placeholder="initiate"></label>
+        <label>Название <input name="label" required maxlength="200"></label>
+        <label>Уровень <input type="number" name="level" min="0" value="0"></label>
+        <label>Цвет <input name="color" type="color" value="#a89878"></label>
+        <label>База благодати <input type="number" name="base_grace" min="0" value="100"></label>
+        <label>Потолок благодати <input type="number" name="cap_grace" min="0" value="200"></label>
+        <label class="check-row" style="flex-direction:row;align-items:center">
+          <input type="checkbox" name="can_transfer_grace" value="1"> Может переводить благодать
+        </label>
+        <button type="submit">Добавить ранг</button>
+      </form>
+    </details>
   </section>
 </div>
 {% endblock %}

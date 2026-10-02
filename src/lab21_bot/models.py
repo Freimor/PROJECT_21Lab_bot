@@ -115,12 +115,45 @@ class LedgerType(StrEnum):
     RESPECT_WITHDRAW = "respect_withdraw"
     POST_REWARD = "post_reward"
     MEME_REWARD = "meme_reward"
+    MARKET_GRACE = "market_grace"
 
 
 class OrderStatus(StrEnum):
     PENDING = "pending"
     FULFILLED = "fulfilled"
     CANCELLED = "cancelled"
+
+
+class ListingKind(StrEnum):
+    REGULAR = "regular"
+    COLLECTIVE = "collective"
+
+
+class ListingCurrency(StrEnum):
+    GRACE = "grace"
+    RUB = "rub"
+
+
+class ListingStatus(StrEnum):
+    ACTIVE = "active"
+    REMOVED = "removed"
+    CLOSED = "closed"
+
+
+class CollectionPhase(StrEnum):
+    NONE = "none"
+    OPEN = "open"
+    FAILED = "failed"
+    READY = "ready"
+
+
+class DealStatus(StrEnum):
+    RESERVED = "reserved"
+    ISSUED = "issued"
+    REFUSED = "refused"
+    DISPUTED = "disputed"
+    KEPT = "kept"
+    RETURNED = "returned"
 
 
 class ProductKind(StrEnum):
@@ -184,8 +217,9 @@ class User(Base):
     staff_role: Mapped[StaffRole | str | None] = mapped_column(
         OpenStrEnum(StaffRole), nullable=True
     )
-    rank: Mapped[CommunityRank | str] = mapped_column(
-        OpenStrEnum(CommunityRank), default=CommunityRank.NOVICE
+    # Community rank. Staff have none.
+    rank: Mapped[CommunityRank | str | None] = mapped_column(
+        OpenStrEnum(CommunityRank), nullable=True, default=CommunityRank.NOVICE
     )
     balance: Mapped[int] = mapped_column(Integer, default=0)
     respect: Mapped[int] = mapped_column(Integer, default=0)
@@ -193,6 +227,12 @@ class User(Base):
     skill_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     # «Открыт к новым заказам» — ЛС при публикации подходящей заявки.
     job_notify_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Режим продаж за рубли: участник подтвердил правила НПД.
+    sales_mode: Mapped[bool] = mapped_column(Boolean, default=False)
+    market_intro_seen: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Staff member may open the miniapp as the fixture participant.
+    can_use_testuser: Mapped[bool] = mapped_column(Boolean, default=False)
+    testuser_active: Mapped[bool] = mapped_column(Boolean, default=False)
     ritual_streak: Mapped[int] = mapped_column(Integer, default=0)
     ritual_last_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     status_message_id: Mapped[int | None] = mapped_column(BigInteger)
@@ -397,6 +437,94 @@ class Order(Base):
     handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     product: Mapped[Product] = relationship()
+
+
+class Listing(Base):
+    """Карточка изделия на ярмарке. Остаток — сколько штук лежит на складе 21Lab."""
+
+    __tablename__ = "listings"
+    __table_args__ = (Index("ix_listings_status_kind", "status", "kind"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    seller_id: Mapped[int | None] = mapped_column(ForeignKey("users.telegram_id"))
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.telegram_id"))
+    title: Mapped[str] = mapped_column(String(160))
+    category: Mapped[str] = mapped_column(String(32), default="other")
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    summary: Mapped[str] = mapped_column(String(400))
+    description: Mapped[str] = mapped_column(Text)
+    photos: Mapped[list[str]] = mapped_column(JSON, default=list)
+    kind: Mapped[ListingKind] = mapped_column(
+        str_enum(ListingKind), default=ListingKind.REGULAR
+    )
+    currency: Mapped[ListingCurrency] = mapped_column(
+        str_enum(ListingCurrency), default=ListingCurrency.GRACE
+    )
+    price: Mapped[int] = mapped_column(Integer)
+    stock: Mapped[int] = mapped_column(Integer, default=0)
+    reserved: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[ListingStatus] = mapped_column(
+        str_enum(ListingStatus), default=ListingStatus.ACTIVE
+    )
+    collection_phase: Mapped[CollectionPhase] = mapped_column(
+        str_enum(CollectionPhase), default=CollectionPhase.NONE
+    )
+    batch_threshold: Mapped[int | None] = mapped_column(Integer)
+    collection_ends_on: Mapped[date | None] = mapped_column(Date)
+    handover_on: Mapped[date | None] = mapped_column(Date)
+    removal_reason: Mapped[str | None] = mapped_column(Text)
+    removed_by: Mapped[int | None] = mapped_column(ForeignKey("users.telegram_id"))
+    fair_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    fair_chat_id: Mapped[int | None] = mapped_column(BigInteger)
+    fair_file_id: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    seller: Mapped[User | None] = relationship(foreign_keys=[seller_id])
+
+
+class ListingPledge(Base):
+    """Намерение забрать штуку из коллективной партии. Оплаты нет."""
+
+    __tablename__ = "listing_pledges"
+
+    listing_id: Mapped[int] = mapped_column(
+        ForeignKey("listings.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.telegram_id"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class MarketDeal(Base):
+    """Заказ ярмарки: резерв склада до выдачи на пункте."""
+
+    __tablename__ = "market_deals"
+    __table_args__ = (
+        Index("ix_market_deals_buyer", "buyer_id", "status"),
+        Index("ix_market_deals_listing", "listing_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listings.id"))
+    buyer_id: Mapped[int] = mapped_column(ForeignKey("users.telegram_id"))
+    quantity: Mapped[int] = mapped_column(Integer)
+    unit_price: Mapped[int] = mapped_column(Integer)
+    currency: Mapped[ListingCurrency] = mapped_column(str_enum(ListingCurrency))
+    status: Mapped[DealStatus] = mapped_column(
+        str_enum(DealStatus), default=DealStatus.RESERVED
+    )
+    qr_token: Mapped[str] = mapped_column(String(32), unique=True)
+    dispute_text: Mapped[str | None] = mapped_column(Text)
+    issued_by: Mapped[int | None] = mapped_column(ForeignKey("users.telegram_id"))
+    resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.telegram_id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    listing: Mapped[Listing] = relationship()
+    buyer: Mapped[User] = relationship(foreign_keys=[buyer_id])
 
 
 class ServiceJob(Base):

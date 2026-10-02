@@ -26,7 +26,7 @@ router = APIRouter(tags=["miniapp-jobs"])
 class CreateJobBody(BaseModel):
     description: str = Field(min_length=1)
     skill_ids: list[str] = Field(min_length=1)
-    price: int = Field(ge=0)
+    price: int
     assignee_note: str = ""
     media: list[dict] = Field(default_factory=list)
 

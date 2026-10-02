@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,9 +36,7 @@ async def perform_ritual(
     if not user.is_approved or user.staff_role is not None:
         raise RitualError(phrase("ritual", "denied"))
 
-    today = today or date.today()
-    # Align "today" with bot timezone when caller passes local date.
-    _ = tz
+    today = today if today is not None else datetime.now(tz).date()
 
     grace = await get_int_setting(session, "ritual_grace", int(setting_default("ritual_grace")))
     bonus_grace = await get_int_setting(

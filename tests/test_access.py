@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lab21_bot.models import StaffRole, User
+from lab21_bot.models import CommunityRank, StaffRole, User
 from lab21_bot.services.access import (
     AccessDenied,
     Permission,
@@ -52,6 +52,13 @@ async def test_only_staff_managers_change_roles_and_lord_cannot_demote_self(
 
     await set_staff_role(session, lord, target, StaffRole.TECH_PRIEST)
     assert target.staff_role is StaffRole.TECH_PRIEST
+    assert target.rank is None
+
+    await set_staff_role(session, lord, target, None)
+    assert target.staff_role is None
+    assert target.rank is CommunityRank.NOVICE
+
+    await set_staff_role(session, lord, target, StaffRole.TECH_PRIEST)
 
     with pytest.raises(AccessDenied):
         await set_staff_role(session, watcher, target, None)

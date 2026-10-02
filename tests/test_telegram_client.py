@@ -20,6 +20,19 @@ def _settings(**kwargs: object) -> Settings:
     return Settings(**base)  # type: ignore[arg-type]
 
 
+def test_transport_error_detects_proxy_failure_not_api_rejection() -> None:
+    class ProxyConnectionError(Exception):
+        pass
+
+    assert tc.is_telegram_transport_error(ProxyConnectionError("amnezia-a:1080"))
+    assert tc.is_telegram_transport_error(TimeoutError("timed out"))
+    assert tc.is_telegram_transport_error(OSError("name not known"))
+    wrapped = RuntimeError("request failed")
+    wrapped.__cause__ = ProxyConnectionError("proxy down")
+    assert tc.is_telegram_transport_error(wrapped)
+    assert not tc.is_telegram_transport_error(RuntimeError("bad request: message is not modified"))
+
+
 def test_proxy_urls_merge_and_dedupe() -> None:
     settings = _settings(
         telegram_proxy="socks5://a:1080",

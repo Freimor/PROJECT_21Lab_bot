@@ -75,6 +75,28 @@ async def test_purchase_service_creates_job(session: AsyncSession) -> None:
     assert job.status is ServiceJobStatus.OPEN
 
 
+async def test_negative_job_price_is_a_clear_error(session: AsyncSession) -> None:
+    customer = User(telegram_id=21, full_name="Customer", is_approved=True, balance=200)
+    session.add(customer)
+    await session.flush()
+    with pytest.raises(JobError, match="отрицательн"):
+        await create_service_job(
+            session,
+            customer_id=customer.telegram_id,
+            skill_ids=["print_3d"],
+            description="Напечатать корпус",
+            price=-5,
+        )
+    with pytest.raises(JobError, match="Минимальная стоимость"):
+        await create_service_job(
+            session,
+            customer_id=customer.telegram_id,
+            skill_ids=["print_3d"],
+            description="Напечатать корпус",
+            price=0,
+        )
+
+
 async def test_claim_job_requires_all_skills(session: AsyncSession) -> None:
     customer = User(telegram_id=10, full_name="Customer", is_approved=True, balance=200)
     worker = User(

@@ -71,6 +71,8 @@ async def create_service_job(
     note = (assignee_note or "").strip()
     floor = min_job_price(skills)
     amount = floor if price is None else int(price)
+    if amount < 0:
+        raise JobError("Стоимость не может быть отрицательной")
     if amount < floor:
         raise JobError(f"Минимальная стоимость: {floor} 🙏")
     reward = default_job_respect(skills) if respect_reward is None else int(respect_reward)

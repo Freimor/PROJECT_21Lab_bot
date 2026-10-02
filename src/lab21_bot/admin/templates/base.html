@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/admin.css?v=20260925a">
+  <link rel="stylesheet" href="/static/admin.css?v=20261002a">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
 <body>
@@ -42,6 +42,9 @@
         <span class="nav-badge" title="Заказы | услуги">+{{ badges.jobs }}|+{{ badges.orders }}</span>
         {% endif %}
       </a>
+      {% endif %}
+      {% if nav.can_market %}
+      <a href="/market" class="{% if request.url.path.startswith('/market') %}active{% endif %}">Ярмарка</a>
       {% endif %}
       {% if nav.can_publications %}
       <a href="/publications" class="{% if request.url.path.startswith('/publications') or request.url.path.startswith('/moderation') %}active{% endif %}">

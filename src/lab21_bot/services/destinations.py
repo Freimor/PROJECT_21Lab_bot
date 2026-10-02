@@ -58,6 +58,17 @@ def job_destination(settings: Any) -> Destination | None:
     )
 
 
+def fair_destination(settings: Any) -> Destination | None:
+    fair_chat = getattr(settings, "fair_chat_id", None)
+    fair_thread = getattr(settings, "fair_thread_id", None)
+    if fair_chat is None and fair_thread is None:
+        return None
+    return Destination(
+        int(fair_chat or settings.main_channel_id),
+        fair_thread,
+    )
+
+
 def shop_destination(settings: Any) -> Destination | None:
     shop_chat = getattr(settings, "shop_chat_id", None)
     shop_thread = getattr(settings, "shop_thread_id", None)

@@ -187,6 +187,35 @@ async def telegram_api_get(
     )
 
 
+_TRANSPORT_ERROR_NAMES = frozenset(
+    {
+        "ProxyConnectionError",
+        "ClientConnectorError",
+        "ClientOSError",
+        "ClientConnectionError",
+        "ServerDisconnectedError",
+        "ServerTimeoutError",
+        "TelegramNetworkError",
+        "ConnectionError",
+        "TimeoutError",
+    }
+)
+
+
+def is_telegram_transport_error(exc: BaseException) -> bool:
+    """True for proxy, DNS, and socket failures (not Telegram API rejections)."""
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, (OSError, TimeoutError)):
+            return True
+        if type(current).__name__ in _TRANSPORT_ERROR_NAMES:
+            return True
+        current = current.__cause__
+    return False
+
+
 def _mask(proxy: str | None) -> str:
     if proxy is None:
         return "direct"

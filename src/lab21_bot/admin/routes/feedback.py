@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated
-from urllib.parse import quote
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -11,9 +11,12 @@ from lab21_bot.admin.templating import render
 from lab21_bot.models import FeedbackKind, FeedbackStatus
 from lab21_bot.services.feedback import (
     KIND_LABELS,
+    STATUS_LABELS,
     FeedbackError,
     REACTION_ACCEPTED,
+    REACTION_DONE,
     REACTION_REJECTED,
+    complete_feedback,
     count_pending_feedback,
     decide_feedback,
     list_feedback,
@@ -27,10 +30,29 @@ def _redirect(
     path: str = "/feedback/bugs",
     message: str | None = None,
     error: str | None = None,
+    status: str | None = None,
 ) -> RedirectResponse:
+    params: dict[str, str] = {}
+    if status:
+        params["status"] = status
     if error:
-        return RedirectResponse(f"{path}?error={quote(error)}", status_code=303)
-    return RedirectResponse(f"{path}?message={quote(message or 'Готово')}", status_code=303)
+        params["error"] = error
+    elif message:
+        params["message"] = message or "Готово"
+    query = f"?{urlencode(params)}" if params else ""
+    return RedirectResponse(f"{path}{query}", status_code=303)
+
+
+def _status_filter(status: str | None) -> FeedbackStatus | None:
+    if status == "all":
+        return None
+    if status == "accepted":
+        return FeedbackStatus.ACCEPTED
+    if status == "rejected":
+        return FeedbackStatus.REJECTED
+    if status == "done":
+        return FeedbackStatus.DONE
+    return FeedbackStatus.PENDING
 
 
 @router.get("/feedback")
@@ -45,13 +67,7 @@ async def feedback_bugs_page(
     user: CurrentUser,
     status: str | None = None,
 ) -> HTMLResponse:
-    status_filter = FeedbackStatus.PENDING
-    if status == "all":
-        status_filter = None
-    elif status == "accepted":
-        status_filter = FeedbackStatus.ACCEPTED
-    elif status == "rejected":
-        status_filter = FeedbackStatus.REJECTED
+    status_filter = _status_filter(status)
     items = await list_feedback(
         session, kind=FeedbackKind.BUG, status=status_filter
     )
@@ -65,6 +81,7 @@ async def feedback_bugs_page(
         items=items,
         status_filter=status or "pending",
         kind_labels={k.value: v for k, v in KIND_LABELS.items()},
+        status_labels={k.value: v for k, v in STATUS_LABELS.items()},
         pending_bugs=bugs,
         pending_upgrades=upgrades,
     )
@@ -77,13 +94,7 @@ async def feedback_upgrades_page(
     user: CurrentUser,
     status: str | None = None,
 ) -> HTMLResponse:
-    status_filter = FeedbackStatus.PENDING
-    if status == "all":
-        status_filter = None
-    elif status == "accepted":
-        status_filter = FeedbackStatus.ACCEPTED
-    elif status == "rejected":
-        status_filter = FeedbackStatus.REJECTED
+    status_filter = _status_filter(status)
     items = await list_feedback(
         session, kind=FeedbackKind.UPGRADE, status=status_filter
     )
@@ -97,6 +108,7 @@ async def feedback_upgrades_page(
         items=items,
         status_filter=status or "pending",
         kind_labels={k.value: v for k, v in KIND_LABELS.items()},
+        status_labels={k.value: v for k, v in STATUS_LABELS.items()},
         pending_bugs=bugs,
         pending_upgrades=upgrades,
     )
@@ -186,5 +198,25 @@ async def feedback_reject(
             else "/feedback/upgrades"
         )
         return _redirect(path, f"Отклонено #{item_id}")
+    except FeedbackError as exc:
+        return _redirect(error=str(exc))
+
+
+@router.post("/feedback/{item_id}/done")
+async def feedback_done(
+    item_id: int,
+    session: DbSession,
+    settings: SettingsDep,
+    actor: RequireModerateContent,
+) -> RedirectResponse:
+    try:
+        row = await complete_feedback(session, actor, item_id)
+        await _set_reaction(settings, row.chat_id, row.message_id, REACTION_DONE)
+        path = (
+            "/feedback/bugs"
+            if row.kind is FeedbackKind.BUG
+            else "/feedback/upgrades"
+        )
+        return _redirect(path, f"Done #{item_id}", status="accepted")
     except FeedbackError as exc:
         return _redirect(error=str(exc))

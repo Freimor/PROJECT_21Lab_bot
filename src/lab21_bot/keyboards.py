@@ -30,7 +30,7 @@ def start_keyboard(settings: Settings | None = None) -> InlineKeyboardMarkup | N
     base = settings.miniapp_base_url.rstrip("/")
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Открыть Lab21", web_app=WebAppInfo(url=base))],
+            [InlineKeyboardButton(text="Открыть Lab21", web_app=WebAppInfo(url=f"{base}#/"))],
             [InlineKeyboardButton(text="FAQ", web_app=WebAppInfo(url=f"{base}#/faq"))],
         ]
     )

@@ -25,10 +25,17 @@ _CMD_STRIP = re.compile(r"(?i)(?:^|\s)/(?:bug|upgrade)(?:@\w+)?")
 REACTION_PENDING = "🤔"
 REACTION_ACCEPTED = "✅"
 REACTION_REJECTED = "❌"
+REACTION_DONE = "👌"
 
 KIND_LABELS = {
     FeedbackKind.BUG: "Баг",
     FeedbackKind.UPGRADE: "Предложение",
+}
+STATUS_LABELS = {
+    FeedbackStatus.PENDING: "открыт",
+    FeedbackStatus.ACCEPTED: "принят",
+    FeedbackStatus.REJECTED: "отклонён",
+    FeedbackStatus.DONE: "Done",
 }
 
 
@@ -170,6 +177,33 @@ async def decide_feedback(
             action="feedback_accept" if accept else "feedback_reject",
             target_id=row.id,
             details={"kind": row.kind.value, "note": row.decision_note},
+        )
+    )
+    await session.flush()
+    return row
+
+
+async def complete_feedback(
+    session: AsyncSession,
+    actor: User,
+    report_id: int,
+) -> FeedbackReport:
+    """Mark an accepted report Done after the fix is in place."""
+    require_permission(actor, Permission.MODERATE_CONTENT)
+    row = await session.get(FeedbackReport, report_id)
+    if row is None:
+        raise FeedbackError("Заявка не найдена")
+    if row.status is FeedbackStatus.DONE:
+        raise FeedbackError("Заявка уже Done")
+    if row.status is not FeedbackStatus.ACCEPTED:
+        raise FeedbackError("Отметить Done можно только у принятой заявки")
+    row.status = FeedbackStatus.DONE
+    session.add(
+        AdminAction(
+            actor_id=actor.telegram_id,
+            action="feedback_done",
+            target_id=row.id,
+            details={"kind": row.kind.value},
         )
     )
     await session.flush()

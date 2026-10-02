@@ -1,18 +1,29 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from lab21_bot.data import list_skills
-from lab21_bot.miniapp.deps import ApprovedUser, DbSession, MiniAppUser, SettingsDep, map_service_error
+from lab21_bot.miniapp.deps import (
+    ApprovedUser,
+    DbSession,
+    MiniAppUser,
+    SettingsDep,
+    map_service_error,
+)
 from lab21_bot.miniapp.serializers import join_status_summary, user_to_dict
-from lab21_bot.services.applications import ApplicationError, remove_member_skill, request_member_skill
+from lab21_bot.services.applications import (
+    ApplicationError,
+    get_pending_application,
+    remove_member_skill,
+    request_member_skill,
+)
 from lab21_bot.services.chat_ui import normalize_bio
 from lab21_bot.services.content import count_user_publications
 from lab21_bot.services.economy import EconomyError, history, transfer
-from lab21_bot.services.applications import get_pending_application
 from lab21_bot.services.ritual import RitualError, perform_ritual
 from lab21_bot.services.settings import get_int_setting
 
@@ -35,12 +46,13 @@ class SkillToggle(BaseModel):
 
 
 @router.get("/me")
-async def get_me(session: DbSession, user: MiniAppUser) -> dict:
+async def get_me(session: DbSession, user: MiniAppUser, settings: SettingsDep) -> dict:
     pending = await get_pending_application(session, user.telegram_id)
     posts = await count_user_publications(session, user.telegram_id)
     payload = user_to_dict(user)
     payload["publications_count"] = posts
     payload["join"] = join_status_summary(pending, user)
+    payload["bowed_today"] = user.ritual_last_at == datetime.now(settings.tz).date()
     return payload
 
 
@@ -95,7 +107,9 @@ async def get_balance(session: DbSession, user: ApprovedUser) -> dict:
     return {
         "balance": user.balance,
         "respect": user.respect,
-        "rank": user.rank.value if hasattr(user.rank, "value") else user.rank,
+        "rank": None
+        if user.staff_role is not None
+        else (user.rank.value if hasattr(user.rank, "value") else user.rank),
         "publications_count": posts,
     }
 

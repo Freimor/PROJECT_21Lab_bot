@@ -16,6 +16,7 @@ from lab21_bot.miniapp.auth import (
 )
 from lab21_bot.models import User
 from lab21_bot.services.access import AccessDenied, Permission, has_permission, register_user
+from lab21_bot.services.testuser import resolve_miniapp_user
 
 
 async def get_db_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -74,7 +75,7 @@ async def get_current_user(
     full_name = webapp_user_full_name(tg_user)
     user = await register_user(session, tg_user.id, full_name, tg_user.username)
     await session.flush()
-    return user
+    return await resolve_miniapp_user(session, user)
 
 
 async def require_approved_user(

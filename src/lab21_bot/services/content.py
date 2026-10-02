@@ -418,6 +418,7 @@ async def publish_content_item(
             dest.chat_id,
             text,
             media=item.media,
+            upload_dir=getattr(settings, "upload_dir", None),
             message_thread_id=dest.thread_id,
             parse_mode=(
                 "HTML"

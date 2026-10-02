@@ -1,3 +1,6 @@
+from types import SimpleNamespace
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lab21_bot.models import (
@@ -103,3 +106,33 @@ async def test_meme_reactions_sync_to_collection(session: AsyncSession) -> None:
     assert template.reaction_count == 4
     # +1 за одобрение мема, +4 за реакции
     assert author.respect == 5
+
+
+def test_read_uploaded_meme_file(tmp_path) -> None:
+    from lab21_bot.services.uploads import UploadError, read_uploaded_file
+
+    folder = tmp_path / "memes"
+    folder.mkdir()
+    (folder / "shot.jpg").write_bytes(b"jpeg-bytes")
+    content, content_type = read_uploaded_file(tmp_path, "memes/shot.jpg")
+    assert content == b"jpeg-bytes"
+    assert content_type == "image/jpeg"
+    with pytest.raises(UploadError):
+        read_uploaded_file(tmp_path, "../secret.jpg")
+
+
+async def test_meme_application_media_serves_saved_file(tmp_path) -> None:
+    from lab21_bot.admin.routes.publications import _proxy_media_file
+
+    folder = tmp_path / "memes"
+    folder.mkdir()
+    (folder / "shot.jpg").write_bytes(b"jpeg-bytes")
+    settings = SimpleNamespace(upload_dir=str(tmp_path))
+    response = await _proxy_media_file(
+        settings,
+        [{"type": "photo", "path": "memes/shot.jpg"}],
+        0,
+    )
+    assert response.status_code == 200
+    assert response.body == b"jpeg-bytes"
+    assert response.media_type == "image/jpeg"

@@ -20,10 +20,11 @@ def quest_to_dict(quest: CommunityQuest) -> dict:
         "title": quest.title,
         "description": quest.description,
         "status": status,
-        "reward": quest.reward,
-        "member_limit": quest.member_limit,
-        "starts_at": quest.starts_at.isoformat() if quest.starts_at else None,
-        "ends_at": quest.ends_at.isoformat() if quest.ends_at else None,
+        "reward": quest.grace_reward,
+        "respect_reward": quest.respect_reward,
+        "member_limit": quest.required_participants,
+        "starts_at": quest.quest_date.isoformat() if quest.quest_date else None,
+        "ends_at": quest.quest_ends_on.isoformat() if quest.quest_ends_on else None,
     }
 
 

@@ -6,7 +6,8 @@ from pathlib import Path
 
 import structlog
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -14,6 +15,7 @@ from lab21_bot.admin.routes import api_router
 from lab21_bot.config import Settings, get_settings
 from lab21_bot.db import bootstrap_database, create_engine, create_session_factory
 from lab21_bot.miniapp.router import router as miniapp_router
+from lab21_bot.services.access import AccessDenied
 from lab21_bot.telegram_client import proxy_urls, select_proxy
 
 logger = structlog.get_logger(__name__)
@@ -56,6 +58,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     Path(settings.project_files_dir).mkdir(parents=True, exist_ok=True)
 
     app = FastAPI(title="Lab21 Admin", lifespan=lifespan)
+
+    @app.exception_handler(AccessDenied)
+    async def access_denied(_request: Request, exc: AccessDenied) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(exc)})
+
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.session_secret,

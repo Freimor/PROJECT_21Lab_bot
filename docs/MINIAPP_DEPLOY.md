@@ -18,9 +18,13 @@ For NAS Telegram outbound proxy / remote SSH editing see [NAS_OPS.md](NAS_OPS.md
 
 ## NAS behind a home router (Compose profile `https`)
 
-The `caddy` service publishes **only** the Mini App paths (`/app`, `/api/miniapp`, `/uploads`)
-and answers 404 elsewhere, so the admin UI is never exposed to the internet — reach it on the
-LAN at `ADMIN_HOST_PORT`.
+The `caddy` service proxies the whole admin process: Mini App (`/app`, `/api/miniapp`) and
+the staff UI (`/`, `/login`, …). Unauthenticated visitors only see the login page. Staff
+enter a Telegram username or id; the bot sends a 6-digit code to that user's private chat.
+The code lasts 5 minutes, allows 5 attempts, and a new one can be requested once a minute.
+The user must have opened the bot at least once (`/start`), otherwise Telegram will not
+deliver the message. `ADMIN_PASSWORD` remains an emergency login. The LAN port
+`ADMIN_HOST_PORT` still works.
 
 ```env
 COMPOSE_PROFILES=amnezia,https
@@ -31,8 +35,14 @@ MINIAPP_ENABLED=true
 MINIAPP_BASE_URL=https://your-name.duckdns.org/app
 ```
 
-Keep `ADMIN_BASE_URL` on the LAN address (`http://192.168.x.x:8081`): an `https://` value marks
-session cookies Secure, and the admin UI then refuses to log in over plain http.
+Set `ADMIN_BASE_URL` to the URL you actually open. An `https://` value marks session cookies
+Secure, so the same browser session will not log in over plain `http://` on the LAN. For the
+public admin that is:
+
+```env
+ADMIN_BASE_URL=https://lab21.microelectronics.dev
+MINIAPP_BASE_URL=https://lab21.microelectronics.dev/app
+```
 
 ### Certificate (DuckDNS DNS-01)
 
@@ -85,8 +95,9 @@ MINIAPP_ENABLED=true
 MINIAPP_BASE_URL=https://lab21.your-domain.example/app
 ```
 
-`8082` is Caddy's loopback-only HTTP listener that proxies only `/app`, `/api/miniapp`,
-`/uploads` — the admin UI stays off the internet.
+`8082` is Caddy's loopback-only HTTP listener. It proxies Mini App and admin to the
+`admin` container. With the public hostname `lab21.microelectronics.dev`, the staff UI
+is `https://lab21.microelectronics.dev/login`.
 
 6. `docker compose up -d` and set BotFather Menu Button to the same `/app` URL.
 

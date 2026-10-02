@@ -5,7 +5,7 @@ type AppContextValue = {
   me: Me | null;
   loading: boolean;
   error: string | null;
-  refresh: () => Promise<void>;
+  refresh: (options?: { silent?: boolean }) => Promise<void>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -15,16 +15,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = async () => {
-    setLoading(true);
-    setError(null);
+  const refresh = async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const data = await api.getMe();
       setMe(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка загрузки");
+      if (!options?.silent) {
+        setError(err instanceof Error ? err.message : "Ошибка загрузки");
+      }
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   };
 

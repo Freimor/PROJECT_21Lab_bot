@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     job_chat_id: int | None = None  # отдельный чат заказов; иначе main + job_thread
     job_channel_id: int | None = None  # устаревший алиас JOB_CHANNEL_ID → тот же chat
     shop_chat_id: int | None = None  # витрина магазина; иначе main + shop_thread
+    fair_chat_id: int | None = None  # топик ярмарки; иначе main + fair_thread
 
     # False on hosts that cannot run a model (low RAM / no GPU): staff approve raw sources.
     llm_enabled: bool = True
@@ -49,6 +50,7 @@ class Settings(BaseSettings):
     flood_thread_id: int | None = None
     job_thread_id: int | None = None
     shop_thread_id: int | None = None
+    fair_thread_id: int | None = None
     bugs_chat_id: int | None = None  # канал/чат «Баги предложения»; иначе MAIN
     bugs_thread_id: int | None = None
     content_silence_days: int = Field(default=setting_default("content_silence_days"), ge=1, le=90)
@@ -110,6 +112,8 @@ class Settings(BaseSettings):
         "job_thread_id",
         "shop_chat_id",
         "shop_thread_id",
+        "fair_chat_id",
+        "fair_thread_id",
         "bugs_chat_id",
         "bugs_thread_id",
         mode="before",

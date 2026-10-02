@@ -8,7 +8,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from lab21_bot.data import rank_base_grace, rank_level, skill_by_id, skill_requires_validation, skill_title
+from lab21_bot.data import (
+    rank_base_grace,
+    rank_level,
+    skill_by_id,
+    skill_requires_validation,
+    skill_title,
+)
 from lab21_bot.models import (
     AdminAction,
     CommunityRank,
@@ -22,6 +28,7 @@ from lab21_bot.models import (
     User,
 )
 from lab21_bot.services.access import Permission, require_permission
+from lab21_bot.services.testuser import TEST_USER_ID
 
 
 class ApplicationError(RuntimeError):
@@ -457,6 +464,79 @@ async def list_pending_applications(
     return list(rows)
 
 
+DIRECTORY_STATUSES: tuple[tuple[str, str], ...] = (
+    ("active", "В сообществе"),
+    ("members", "Только участники"),
+    ("staff", "Только сотрудники"),
+    ("pending", "Без допуска"),
+    ("removed", "Удалённые"),
+    ("all", "Все"),
+)
+
+
+def _directory_status(user: User, status: str) -> bool:
+    if status == "all":
+        return True
+    if status == "removed":
+        return not user.is_active
+    if status == "pending":
+        return bool(user.is_active and user.staff_role is None and not user.is_approved)
+    if status == "staff":
+        return bool(user.is_active and user.staff_role is not None)
+    if status == "members":
+        return bool(user.is_active and user.is_approved and user.staff_role is None)
+    return bool(user.is_active and (user.is_approved or user.staff_role is not None))
+
+
+def _directory_query_match(user: User, query: str) -> bool:
+    needle = query.strip().casefold()
+    if not needle:
+        return True
+    if needle in user.full_name.casefold():
+        return True
+    if user.username and needle.lstrip("@") in user.username.casefold():
+        return True
+    return needle in str(user.telegram_id)
+
+
+async def search_community_directory(
+    session: AsyncSession,
+    *,
+    query: str = "",
+    role: str = "",
+    rank: str = "",
+    skill: str = "",
+    status: str = "active",
+) -> list[User]:
+    from lab21_bot.services.ranks_catalog import catalog_key
+
+    chosen = status if any(key == status for key, _label in DIRECTORY_STATUSES) else "active"
+    role_key = role.strip()
+    rank_key = rank.strip()
+    skill_key = skill.strip()
+    rows = await session.scalars(
+        select(User)
+        .where(User.telegram_id != TEST_USER_ID)
+        .order_by(User.full_name)
+    )
+    found: list[User] = []
+    for user in rows:
+        if not _directory_status(user, chosen):
+            continue
+        if not _directory_query_match(user, query):
+            continue
+        if role_key == "none" and user.staff_role is not None:
+            continue
+        if role_key not in {"", "none"} and catalog_key(user.staff_role) != role_key:
+            continue
+        if rank_key and catalog_key(user.rank) != rank_key:
+            continue
+        if skill_key and skill_key not in set(user.skill_ids or []):
+            continue
+        found.append(user)
+    return found
+
+
 async def list_community_members(session: AsyncSession) -> list[User]:
     rows = await session.scalars(
         select(User)
@@ -464,6 +544,7 @@ async def list_community_members(session: AsyncSession) -> list[User]:
             User.is_approved.is_(True),
             User.staff_role.is_(None),
             User.is_active.is_(True),
+            User.telegram_id != TEST_USER_ID,
         )
         .order_by(User.full_name)
     )
@@ -621,6 +702,7 @@ async def resolve_application(
                 if existing_unique is not None:
                     raise ApplicationError("Уникальная роль уже назначена другому пользователю")
             user.staff_role = staff_role
+            user.rank = None
             user.balance = 0
             user.respect = 0
         elif was_skill_validation:

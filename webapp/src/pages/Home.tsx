@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../context";
 import { Button, Card, ErrorBox, Layout, Loading } from "../components";
 
 export default function HomePage() {
-  const { me, loading, error } = useApp();
+  const { me, loading, error, refresh } = useApp();
+  const [bowing, setBowing] = useState(false);
 
   if (loading) return <Layout><Loading /></Layout>;
   if (error) return <Layout><ErrorBox message={error} /></Layout>;
@@ -30,6 +32,7 @@ export default function HomePage() {
     <Layout title={`Привет, ${me?.full_name ?? "гость"}`}>
       <div className="grid grid-2">
         <Link to="/shop" className="tile">Магазин</Link>
+        <Link to="/market" className="tile">Маркет</Link>
         <Link to="/order" className="tile">Заказ услуги</Link>
         <Link to="/jobs" className="tile">Мои заказы</Link>
         <Link to="/profile" className="tile">Профиль</Link>
@@ -43,15 +46,25 @@ export default function HomePage() {
       {me && (
         <Card>
           <p>Баланс: {me.balance} 🙏 · Уважение: {me.respect} ❇</p>
+          {me.ritual_streak ? <p>Серия приклонений: {me.ritual_streak}</p> : null}
           <Button
             variant="secondary"
+            disabled={bowing || Boolean(me.bowed_today)}
             onClick={async () => {
-              const { api } = await import("../api");
-              const result = await api.ritualBow();
-              alert(result.message);
+              setBowing(true);
+              try {
+                const { api } = await import("../api");
+                const result = await api.ritualBow();
+                alert(result.message);
+              } catch (err) {
+                alert(err instanceof Error ? err.message : "Не получилось");
+              } finally {
+                setBowing(false);
+                await refresh({ silent: true });
+              }
             }}
           >
-            Приклониться
+            {me.bowed_today ? "Уже приклонился" : "Приклониться"}
           </Button>
         </Card>
       )}

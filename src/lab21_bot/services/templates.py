@@ -8,11 +8,143 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from lab21_bot.models import ContentTemplate, MemeCollection, SeasonEvent, TemplateKind, User
+from lab21_bot.models import (
+    AdminAction,
+    BotSetting,
+    ContentTemplate,
+    MemeCollection,
+    SeasonEvent,
+    TemplateKind,
+    User,
+)
 from lab21_bot.services.access import Permission, require_permission
 
 _COLLECTION_KEY_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
 DEFAULT_MEME_COLLECTION = "default"
+ACTIVE_MEME_COLLECTIONS_SETTING = "active_meme_collections"
+
+
+def active_meme_collection_key(season: object | None) -> str:
+    """Collection a live season forces. Without a season this is default."""
+    if season is None:
+        return DEFAULT_MEME_COLLECTION
+    key = str(getattr(season, "meme_collection", "") or "").strip()
+    return key or DEFAULT_MEME_COLLECTION
+
+
+def _stored_collection_state(value: object) -> tuple[list[str], int | None]:
+    if not isinstance(value, dict):
+        return [], None
+    keys: list[str] = []
+    raw_keys = value.get("keys")
+    if isinstance(raw_keys, list):
+        for item in raw_keys:
+            if not isinstance(item, str):
+                continue
+            try:
+                key = normalize_collection_key(item)
+            except TemplateError:
+                continue
+            if key not in keys:
+                keys.append(key)
+    raw_season = value.get("season_id")
+    season_id = raw_season if isinstance(raw_season, int) else None
+    return keys, season_id
+
+
+async def _save_active_meme_collections(
+    session: AsyncSession,
+    keys: list[str],
+    *,
+    season_id: int | None,
+    updated_by: int | None = None,
+) -> None:
+    payload = {"keys": keys, "season_id": season_id}
+    row = await session.get(BotSetting, ACTIVE_MEME_COLLECTIONS_SETTING)
+    if row is None:
+        session.add(
+            BotSetting(
+                key=ACTIVE_MEME_COLLECTIONS_SETTING,
+                value=payload,
+                updated_by=updated_by,
+            )
+        )
+    else:
+        row.value = payload
+        row.updated_by = updated_by
+    await session.flush()
+
+
+async def resolve_active_meme_collections(
+    session: AsyncSession,
+    season: SeasonEvent | None,
+) -> list[str]:
+    """Collections autopost may draw from.
+
+    A live season overwrites the saved checkboxes with its own collection.
+    After that season ends, the saved choice becomes default.
+    """
+    row = await session.get(BotSetting, ACTIVE_MEME_COLLECTIONS_SETTING)
+    keys, season_id = _stored_collection_state(None if row is None else row.value)
+    if season is not None:
+        forced = active_meme_collection_key(season)
+        if keys != [forced] or season_id != season.id:
+            await _save_active_meme_collections(session, [forced], season_id=season.id)
+        return [forced]
+    if season_id is not None:
+        await _save_active_meme_collections(
+            session, [DEFAULT_MEME_COLLECTION], season_id=None
+        )
+        return [DEFAULT_MEME_COLLECTION]
+    return keys or [DEFAULT_MEME_COLLECTION]
+
+
+async def set_active_meme_collections(
+    session: AsyncSession,
+    actor: User,
+    keys: list[str],
+    *,
+    season: SeasonEvent | None,
+) -> list[str]:
+    require_permission(actor, Permission.MANAGE_SETTINGS)
+    if season is not None:
+        raise TemplateError("Сейчас идёт сезонный ивент: коллекцию задаёт он")
+    cleaned: list[str] = []
+    for raw in keys:
+        key = normalize_collection_key(raw)
+        if key not in cleaned:
+            cleaned.append(key)
+    if not cleaned:
+        raise TemplateError("Отметьте хотя бы одну коллекцию")
+    known = {item.key for item in await list_meme_collections(session)}
+    cleaned = [key for key in cleaned if key in known]
+    if not cleaned:
+        raise TemplateError("Отметьте хотя бы одну коллекцию")
+    await _save_active_meme_collections(
+        session, cleaned, season_id=None, updated_by=actor.telegram_id
+    )
+    session.add(
+        AdminAction(
+            actor_id=actor.telegram_id,
+            action="set_active_meme_collections",
+            details={"keys": cleaned},
+        )
+    )
+    await session.flush()
+    return cleaned
+
+
+async def _forget_active_meme_collection(session: AsyncSession, key: str) -> None:
+    row = await session.get(BotSetting, ACTIVE_MEME_COLLECTIONS_SETTING)
+    if row is None:
+        return
+    keys, season_id = _stored_collection_state(row.value)
+    if key not in keys or season_id is not None:
+        return
+    remaining = [item for item in keys if item != key] or [DEFAULT_MEME_COLLECTION]
+    await _save_active_meme_collections(
+        session, remaining, season_id=None, updated_by=row.updated_by
+    )
 
 
 class TemplateError(RuntimeError):
@@ -141,6 +273,7 @@ async def delete_meme_collection(
     )
     if row is not None:
         await session.delete(row)
+    await _forget_active_meme_collection(session, source)
     await session.flush()
     return moved
 
@@ -307,29 +440,34 @@ async def pick_template(
     *,
     exclude_id: int | None = None,
     collection_key: str | None = None,
+    collection_keys: list[str] | None = None,
 ) -> ContentTemplate | None:
-    key = (collection_key or "default").strip() or "default"
-    items = [
-        item
-        for item in await list_templates(session, kind=kind)
-        if item.is_active
-        and item.id != exclude_id
-        and (item.collection_key or "default") == key
-    ]
-    if not items and key != "default":
-        items = [
+    if collection_keys:
+        keys: list[str] = []
+        for raw in collection_keys:
+            key = (raw or "").strip() or DEFAULT_MEME_COLLECTION
+            if key not in keys:
+                keys.append(key)
+        if not keys:
+            keys = [DEFAULT_MEME_COLLECTION]
+    else:
+        keys = [(collection_key or DEFAULT_MEME_COLLECTION).strip() or DEFAULT_MEME_COLLECTION]
+    catalog = await list_templates(session, kind=kind)
+
+    def matching(*, skip_id: int | None, only: list[str]) -> list[ContentTemplate]:
+        return [
             item
-            for item in await list_templates(session, kind=kind)
+            for item in catalog
             if item.is_active
-            and item.id != exclude_id
-            and (item.collection_key or "default") == "default"
+            and (skip_id is None or item.id != skip_id)
+            and (item.collection_key or DEFAULT_MEME_COLLECTION) in only
         ]
+
+    items = matching(skip_id=exclude_id, only=keys)
+    if not items and DEFAULT_MEME_COLLECTION not in keys:
+        items = matching(skip_id=exclude_id, only=[DEFAULT_MEME_COLLECTION])
     if not items:
-        items = [
-            item
-            for item in await list_templates(session, kind=kind)
-            if item.is_active and (item.collection_key or "default") == key
-        ]
+        items = matching(skip_id=None, only=keys)
     if not items:
         return None
     return random.choice(items)

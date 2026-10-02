@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import datetime
 from typing import Annotated
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
-import json
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -20,6 +21,7 @@ from lab21_bot.admin.deps import (
 from lab21_bot.admin.templating import render
 from lab21_bot.config import Settings
 from lab21_bot.data import setting_default
+from lab21_bot.llm.client import LLMClient, LLMError
 from lab21_bot.models import ContentItem, ContentKind, ContentTemplate, TemplateKind
 from lab21_bot.services.access import Permission, has_permission
 from lab21_bot.services.admin_notify import notify_admin_event
@@ -38,8 +40,8 @@ from lab21_bot.services.content import (
 )
 from lab21_bot.services.destinations import flood_destination
 from lab21_bot.services.flood import maybe_send_flood_teaser
+from lab21_bot.services.images import prepare_browser_image
 from lab21_bot.services.llm_config import get_llm_runtime
-from lab21_bot.llm.client import LLMClient, LLMError
 from lab21_bot.services.memes import (
     MemeError,
     approve_meme_to_collection,
@@ -50,6 +52,7 @@ from lab21_bot.services.memes import (
     reject_meme_application,
 )
 from lab21_bot.services.notify import notify_telegram_user
+from lab21_bot.services.seasons import active_season
 from lab21_bot.services.settings import SettingError, get_int_setting, set_int_setting
 from lab21_bot.services.telegram_profile import TelegramProfileError, download_telegram_file
 from lab21_bot.services.templates import (
@@ -61,8 +64,11 @@ from lab21_bot.services.templates import (
     list_meme_collection,
     list_meme_collections,
     list_teaser_collection,
+    resolve_active_meme_collections,
+    set_active_meme_collections,
     update_template,
 )
+from lab21_bot.services.uploads import UploadError, read_uploaded_file
 
 router = APIRouter(tags=["publications"])
 
@@ -201,6 +207,7 @@ async def publications_teasers_page(
 async def publications_memes_page(
     request: Request,
     session: DbSession,
+    settings: SettingsDep,
     user: CurrentUser,
 ) -> HTMLResponse:
     nav = _pub_nav(user)
@@ -217,6 +224,8 @@ async def publications_memes_page(
     )
     collections = await list_meme_collections(session)
     collection_keys = [item.key for item in collections]
+    season = await active_season(session, today=datetime.now(settings.tz).date())
+    active_collections = await resolve_active_meme_collections(session, season)
     return await render(
         request,
         "publications_memes.html",
@@ -230,6 +239,8 @@ async def publications_memes_page(
         collection_keys_json=json.dumps(collection_keys, ensure_ascii=False),
         collection_filter=collection_filter or "",
         reactions_asc=reactions_asc,
+        active_season=season,
+        active_collections=active_collections,
         **nav,
         message=request.query_params.get("message"),
         error=request.query_params.get("error"),
@@ -245,21 +256,39 @@ async def _proxy_media_file(
     if index < 0 or index >= len(items):
         return Response(status_code=404)
     entry = items[index]
-    file_id = entry.get("file_id") if isinstance(entry, dict) else None
-    if not file_id:
+    if not isinstance(entry, dict):
         return Response(status_code=404)
-    try:
-        content, content_type = await download_telegram_file(
-            settings.telegram_bot_token.get_secret_value(),
-            str(file_id),
-        )
-    except TelegramProfileError:
+    loaded = await _load_media_bytes(settings, entry)
+    if loaded is None:
         return Response(status_code=404)
+    content, content_type = await asyncio.to_thread(prepare_browser_image, *loaded)
     return Response(
         content=content,
         media_type=content_type,
         headers={"Cache-Control": "private, max-age=3600"},
     )
+
+
+async def _load_media_bytes(
+    settings: Settings,
+    entry: dict,
+) -> tuple[bytes, str] | None:
+    relative = entry.get("path")
+    if isinstance(relative, str) and relative.strip():
+        try:
+            return read_uploaded_file(settings.upload_dir, relative)
+        except UploadError:
+            pass
+    file_id = entry.get("file_id")
+    if not file_id:
+        return None
+    try:
+        return await download_telegram_file(
+            settings.telegram_bot_token.get_secret_value(),
+            str(file_id),
+        )
+    except TelegramProfileError:
+        return None
 
 
 @router.get("/publications/memes/applications/{item_id}/media/{index}")
@@ -658,6 +687,22 @@ async def publications_meme_reject(
         return _redirect("/publications/memes", error=str(exc))
 
 
+@router.post("/publications/memes/collections/active")
+async def publications_meme_collections_active(
+    session: DbSession,
+    settings: SettingsDep,
+    actor: RequireManageSettings,
+    keys: Annotated[list[str] | None, Form()] = None,
+) -> RedirectResponse:
+    season = await active_season(session, today=datetime.now(settings.tz).date())
+    try:
+        saved = await set_active_meme_collections(session, actor, keys or [], season=season)
+    except TemplateError as exc:
+        return _redirect("/publications/memes#collections", error=str(exc))
+    listed = ", ".join(saved)
+    return _redirect("/publications/memes#collections", f"Сейчас используются: {listed}")
+
+
 @router.post("/publications/memes/collections/create")
 async def publications_meme_collection_create(
     session: DbSession,
@@ -733,6 +778,7 @@ async def publications_meme_post_now(
             chat_id=flood.chat_id,
             message_thread_id=flood.thread_id,
             fallback_author_id=settings.bootstrap_magister_id,
+            upload_dir=settings.upload_dir,
         )
         return _redirect("/publications/memes", f"Мем запощен (#{item.id})")
     except MemeError as exc:

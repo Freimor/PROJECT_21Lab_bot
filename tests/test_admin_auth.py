@@ -8,9 +8,18 @@ import pytest
 from pydantic import SecretStr
 
 from lab21_bot.admin.auth import (
+    OTP_MAX_ATTEMPTS,
     AuthError,
+    check_login_code,
+    login_code_digest,
+    new_login_code,
+    otp_challenge,
+    otp_cooldown_active,
+    mark_otp_sent,
     password_login_allowed,
     require_staff_user,
+    reset_otp_cooldowns,
+    telegram_bot_id,
     verify_admin_password,
     verify_telegram_login,
 )
@@ -37,6 +46,11 @@ def _signed_telegram_payload(bot_token: str, **fields: object) -> dict[str, obje
     secret_key = hashlib.sha256(bot_token.encode()).digest()
     payload["hash"] = hmac.new(secret_key, "\n".join(pairs).encode(), hashlib.sha256).hexdigest()
     return payload
+
+
+def test_telegram_bot_id() -> None:
+    assert telegram_bot_id("123456:TESTTOKEN") == 123456
+    assert telegram_bot_id("not-a-token") is None
 
 
 def test_verify_telegram_login_ok() -> None:
@@ -93,6 +107,45 @@ def test_password_login_disabled() -> None:
     assert not password_login_allowed(settings)
     with pytest.raises(AuthError, match="отключён"):
         verify_admin_password(settings, "anything")
+
+
+def test_login_code_accepts_matching_code() -> None:
+    code = new_login_code()
+    assert len(code) == 6 and code.isdigit()
+    now = int(time.time())
+    challenge = otp_challenge(42, code, "secret", now=now)
+    status, updated = check_login_code(challenge, code, "secret", now=now)
+    assert status == "ok"
+    assert updated is None
+    assert login_code_digest(code, 42, "secret") != login_code_digest(code, 7, "secret")
+
+
+def test_login_code_locks_after_too_many_attempts() -> None:
+    now = int(time.time())
+    challenge: dict[str, object] | None = otp_challenge(42, "123456", "secret", now=now)
+    status = ""
+    for _ in range(OTP_MAX_ATTEMPTS):
+        assert challenge is not None
+        status, challenge = check_login_code(challenge, "000000", "secret", now=now)
+    assert status == "locked"
+    assert challenge is None
+
+
+def test_login_code_expired() -> None:
+    now = int(time.time())
+    challenge = otp_challenge(42, "123456", "secret", now=now - 1000)
+    status, updated = check_login_code(challenge, "123456", "secret", now=now)
+    assert status == "expired"
+    assert updated is None
+
+
+def test_otp_cooldown() -> None:
+    reset_otp_cooldowns()
+    assert not otp_cooldown_active(42, 1_000.0)
+    mark_otp_sent(42, 1_000.0)
+    assert otp_cooldown_active(42, 1_030.0)
+    assert not otp_cooldown_active(42, 1_061.0)
+    reset_otp_cooldowns()
 
 
 def test_require_staff_user() -> None:

@@ -5,6 +5,14 @@ from pathlib import Path
 
 from fastapi import UploadFile
 
+_IMAGE_CONTENT_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
+
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -40,6 +48,19 @@ async def save_image(
         raise UploadError("Файл больше 5 МБ")
     path.write_bytes(data)
     return f"{subdir}/{filename}"
+
+
+def read_uploaded_file(upload_dir: str | Path, relative: str) -> tuple[bytes, str]:
+    """Read a file saved under ``upload_dir``. Rejects absolute paths and ``..``."""
+    rel = Path(relative)
+    if rel.is_absolute() or ".." in rel.parts or not relative.strip():
+        raise UploadError("Некорректный путь файла")
+    root = Path(upload_dir).resolve()
+    full = (root / rel).resolve()
+    if not full.is_relative_to(root) or not full.is_file():
+        raise UploadError("Файл не найден")
+    content_type = _IMAGE_CONTENT_TYPES.get(full.suffix.lower(), "application/octet-stream")
+    return full.read_bytes(), content_type
 
 
 async def save_product_image(

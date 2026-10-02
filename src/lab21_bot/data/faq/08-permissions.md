@@ -10,6 +10,9 @@
 | `manage_economy` | экономика, респект/благодать, refill % |
 | `manage_store` | витрина: создание/правка товаров и услуг |
 | `moderate_orders` | выдача/отмена заказов магазина |
+| `fair_moderate` | ярмарка: снять карточку, карточка лаборатории |
+| `fair_warehouse` | ярмарка: приёмка на склад и выдача по QR |
+| `fair_disputes` | ярмарка: закрыть спор |
 | `moderate_content` | публикации, мемы, LLM-черновики |
 | `create_staff_content` | staff-черновики / служебный контент |
 | `manage_settings` | настройки бота, LLM, уведомлений, публикации |
@@ -22,7 +25,7 @@
 | Тёмный лорд | всё, включая `manage_system` |
 | Магистр | всё **кроме** `manage_system` |
 | Техножрец | `manage_economy`, `create_staff_content` |
-| Сервитор | `moderate_content`, `moderate_orders`, `create_staff_content` |
+| Сервитор | `moderate_content`, `moderate_orders`, `create_staff_content`, `fair_moderate`, `fair_warehouse`, `fair_disputes` |
 
 ## Заметки
 

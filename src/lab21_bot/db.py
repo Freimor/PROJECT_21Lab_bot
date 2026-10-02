@@ -48,12 +48,14 @@ async def bootstrap_database(
                     telegram_id=settings.bootstrap_magister_id,
                     full_name="Лорд",
                     staff_role=StaffRole.LORD,
+                    rank=None,
                     is_approved=True,
                 )
             )
         else:
             if user.staff_role != StaffRole.LORD:
                 user.staff_role = StaffRole.LORD
+            user.rank = None
             user.is_approved = True
 
     from lab21_bot.services.skill_catalog import ensure_skills_seeded

@@ -4,40 +4,28 @@
 }
 
 # Public HTTPS when the ISP actually forwards 443 → HTTPS_HOST_PORT.
+# Mini App and the staff admin UI share this hostname. Admin pages require a
+# Telegram one-time code (or the emergency password).
 {$PUBLIC_DOMAIN} {
 	tls /certs/{$PUBLIC_DOMAIN}.crt /certs/{$PUBLIC_DOMAIN}.key
 
 	encode zstd gzip
 
-	@miniapp path /app /app/* /api/miniapp/* /uploads/*
-	handle @miniapp {
-		reverse_proxy admin:{$ADMIN_PORT:8080} {
-			header_up X-Forwarded-Proto https
-			header_up X-Forwarded-Host {host}
-			header_up X-Real-IP {remote_host}
-		}
-	}
-
-	handle {
-		respond 404
+	reverse_proxy admin:{$ADMIN_PORT:8080} {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+		header_up X-Real-IP {remote_host}
 	}
 }
 
 # Plain HTTP on the Docker network only (not published on the host). Used by
-# Cloudflare quick tunnel so the admin UI never leaves the LAN.
+# Cloudflare named tunnel: public hostname → http://127.0.0.1:8082.
 :80 {
 	encode zstd gzip
 
-	@miniapp path /app /app/* /api/miniapp/* /uploads/*
-	handle @miniapp {
-		reverse_proxy admin:{$ADMIN_PORT:8080} {
-			header_up X-Forwarded-Proto https
-			header_up X-Forwarded-Host {host}
-			header_up X-Real-IP {remote_host}
-		}
-	}
-
-	handle {
-		respond 404
+	reverse_proxy admin:{$ADMIN_PORT:8080} {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+		header_up X-Real-IP {remote_host}
 	}
 }

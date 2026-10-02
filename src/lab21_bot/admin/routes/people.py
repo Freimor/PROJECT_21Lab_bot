@@ -17,24 +17,23 @@ from lab21_bot.services.access import (
     Permission,
     find_user,
     has_permission,
-    list_staff,
     set_staff_role,
 )
 from lab21_bot.services.applications import (
     ApplicationError,
+    DIRECTORY_STATUSES,
     pending_validation_skill_ids,
-    list_community_members_filtered,
     list_pending_applications,
     remove_member,
     resolve_application,
+    search_community_directory,
     set_member_rank,
     update_member_skills,
 )
-from lab21_bot.services.ranks_catalog import get_ranks_snapshot
+from lab21_bot.services.ranks_catalog import catalog_key, get_ranks_snapshot
 from lab21_bot.services.commands import sync_user_commands_http
 from lab21_bot.services.economy import EconomyError, change_balance, change_respect
 from lab21_bot.services.notify import notify_telegram_user
-from lab21_bot.services.periods import PERIOD_KEYS, PERIOD_LABELS, parse_period, period_since
 from lab21_bot.services.settings import SettingError, get_int_setting
 from lab21_bot.services.skill_catalog import (
     SkillCatalogError,
@@ -76,6 +75,7 @@ from lab21_bot.services.telegram_profile import (
     download_telegram_file,
     sync_users_profiles,
 )
+from lab21_bot.services.testuser import TEST_USER_ID, TestUserError, set_testuser_allowed
 
 router = APIRouter(tags=["community"])
 
@@ -127,8 +127,13 @@ async def community_home(user: CurrentUser) -> RedirectResponse:
 
 @router.get("/staff", response_class=HTMLResponse)
 @router.get("/adepts", response_class=HTMLResponse)
-async def people_legacy_redirect() -> RedirectResponse:
-    return RedirectResponse("/community/staff", status_code=303)
+@router.get("/community/staff", response_class=HTMLResponse)
+async def people_legacy_redirect(request: Request) -> RedirectResponse:
+    query = request.url.query
+    dest = "/community/members"
+    if query:
+        dest = f"{dest}?{query}"
+    return RedirectResponse(dest, status_code=303)
 
 
 @router.get("/community/applications", response_class=HTMLResponse)
@@ -161,32 +166,6 @@ async def community_applications(
     )
 
 
-@router.get("/community/staff", response_class=HTMLResponse)
-async def community_staff(
-    request: Request,
-    session: DbSession,
-    settings: SettingsDep,
-    user: RequireManageStaff,
-) -> HTMLResponse:
-    staff = await list_staff(session)
-    await sync_users_profiles(
-        session,
-        staff,
-        settings.telegram_bot_token.get_secret_value(),
-    )
-    return await render(
-        request,
-        "community_staff.html",
-        user=user,
-        session=session,
-        community_section="staff",
-        staff=staff,
-        roles=await _assignable_roles(session),
-        message=request.query_params.get("message"),
-        error=request.query_params.get("error"),
-    )
-
-
 @router.get("/community/members", response_class=HTMLResponse)
 async def community_members(
     request: Request,
@@ -198,23 +177,22 @@ async def community_members(
     can_economy = has_permission(user, Permission.MANAGE_ECONOMY)
     if not can_staff and not can_economy:
         return RedirectResponse("/", status_code=303)
-    period = parse_period(request.query_params.get("period"), default="all")
-    sort = request.query_params.get("sort", "rank")
-    if sort not in {"grace", "respect", "rank"}:
-        sort = "rank"
-    sort_dir = request.query_params.get("dir", "asc")
-    sort_asc = sort_dir != "desc"
-    since = period_since(period, tz=settings.tz)
-    member_rows = await list_community_members_filtered(
+    query = request.query_params.get("q", "").strip()
+    role = request.query_params.get("role", "").strip()
+    rank = request.query_params.get("rank", "").strip()
+    skill = request.query_params.get("skill", "").strip()
+    status = request.query_params.get("status", "active").strip() or "active"
+    people = await search_community_directory(
         session,
-        rank=None,
-        since=since,
-        sort=sort,
-        sort_asc=sort_asc,
+        query=query,
+        role=role,
+        rank=rank,
+        skill=skill,
+        status=status,
     )
     await sync_users_profiles(
         session,
-        [row.user for row in member_rows],
+        people,
         settings.telegram_bot_token.get_secret_value(),
     )
     grace_refill_percent = await get_int_setting(
@@ -227,23 +205,29 @@ async def community_members(
         "grace_decay_percent",
         setting_default("grace_decay_percent"),
     )
+    chosen_status = (
+        status if any(key == status for key, _label in DIRECTORY_STATUSES) else "active"
+    )
     return await render(
         request,
         "community_members.html",
         user=user,
         session=session,
         community_section="members",
-        member_rows=member_rows,
+        people=people,
         can_staff=can_staff,
         can_economy=can_economy,
         grace_refill_percent=grace_refill_percent,
         grace_decay_percent=grace_decay_percent,
-        filter_period=period,
-        filter_sort=sort,
-        filter_dir="asc" if sort_asc else "desc",
-        period_keys=PERIOD_KEYS,
-        period_labels=PERIOD_LABELS,
-        period_limited=since is not None,
+        roles=get_roles_snapshot(),
+        ranks=get_ranks_snapshot(),
+        skills=list_skills(),
+        statuses=DIRECTORY_STATUSES,
+        filter_q=query,
+        filter_role=role,
+        filter_rank=rank,
+        filter_skill=skill,
+        filter_status=chosen_status,
         message=request.query_params.get("message"),
         error=request.query_params.get("error"),
     )
@@ -254,17 +238,26 @@ async def community_member_edit(
     telegram_id: int,
     request: Request,
     session: DbSession,
-    user: RequireManageStaff,
+    settings: SettingsDep,
+    user: CurrentUser,
 ) -> HTMLResponse:
+    can_staff = has_permission(user, Permission.MANAGE_STAFF)
+    can_economy = has_permission(user, Permission.MANAGE_ECONOMY)
+    if not can_staff and not can_economy:
+        return RedirectResponse("/", status_code=303)
     member = await session.get(User, telegram_id)
-    if (
-        member is None
-        or not member.is_approved
-        or member.staff_role is not None
-        or not member.is_active
-    ):
-        return _flash("/community/members", error="Участник не найден")
+    if member is None or member.telegram_id == TEST_USER_ID:
+        return _flash("/community/members", error="Человек не найден")
+    await sync_users_profiles(
+        session,
+        [member],
+        settings.telegram_bot_token.get_secret_value(),
+    )
     pending_skills = await pending_validation_skill_ids(session, member.telegram_id)
+    role_ids = await _assignable_roles(session)
+    current_role = catalog_key(member.staff_role)
+    if current_role and current_role not in role_ids:
+        role_ids = [current_role, *role_ids]
     return await render(
         request,
         "community_member_edit.html",
@@ -275,7 +268,9 @@ async def community_member_edit(
         ranks=get_ranks_snapshot(),
         skills=list_skills(),
         pending_skills=pending_skills,
-        can_economy=has_permission(user, Permission.MANAGE_ECONOMY),
+        assignable_roles=role_ids,
+        can_staff=can_staff,
+        can_economy=can_economy,
         message=request.query_params.get("message"),
         error=request.query_params.get("error"),
     )
@@ -736,10 +731,12 @@ async def set_role(
     target_query: Annotated[str, Form()],
     role: Annotated[str, Form()],
 ) -> RedirectResponse:
+    back = "/community/members"
     try:
         target = await find_user(session, target_query)
         if target is None:
             raise AccessDenied("Участник не найден")
+        back = f"/community/members/{target.telegram_id}"
         new_role = _parse_staff_role(role)
         previous_role = target.staff_role
         await set_staff_role(session, actor, target, new_role)
@@ -758,9 +755,30 @@ async def set_role(
             await invite_to_staff_chat(token, settings.staff_chat_id, target.telegram_id)
         elif new_role is None and previous_role is not None:
             await kick_from_staff_chat(token, settings.staff_chat_id, target.telegram_id)
-        return _flash("/community/staff", message="Роль обновлена")
+        return _flash(back, message="Роль обновлена")
     except (AccessDenied, ValueError) as exc:
-        return _flash("/community/staff", error=str(exc))
+        return _flash(back, error=str(exc))
+
+
+@router.post("/community/staff/{telegram_id}/testuser")
+async def community_staff_testuser(
+    telegram_id: int,
+    session: DbSession,
+    actor: RequireManageStaff,
+    settings: SettingsDep,
+    allowed: Annotated[str, Form()] = "0",
+) -> RedirectResponse:
+    target = await session.scalar(select(User).where(User.telegram_id == telegram_id))
+    if target is None:
+        return _flash("/community/members", error="Сотрудник не найден")
+    try:
+        await set_testuser_allowed(session, actor, target, allowed=allowed == "1")
+        token = settings.telegram_bot_token.get_secret_value()
+        await sync_user_commands_http(token, target)
+        text = "Команда /testuser разрешена" if allowed == "1" else "Команда /testuser закрыта"
+        return _flash(f"/community/members/{telegram_id}", message=text)
+    except (TestUserError, AccessDenied) as exc:
+        return _flash(f"/community/members/{telegram_id}", error=str(exc))
 
 
 @router.post("/community/applications/{application_id}/resolve")
@@ -890,8 +908,7 @@ async def remove_confirm_submit(
         )
         if was_staff:
             await kick_from_staff_chat(token, settings.staff_chat_id, telegram_id)
-        dest = "/community/staff" if was_staff else "/community/members"
-        return _flash(dest, message="Участник удалён")
+        return _flash("/community/members", message="Участник удалён")
     except (ApplicationError, ValueError) as exc:
         return RedirectResponse(
             f"/community/{telegram_id}/remove?error={quote(str(exc))}",
@@ -954,9 +971,9 @@ async def people_adjust(
             telegram_id,
             text,
         )
-        return _flash("/community/members", message=label)
+        return _flash(f"/community/members/{telegram_id}", message=label)
     except (EconomyError, ValueError) as exc:
-        return _flash("/community/members", error=str(exc))
+        return _flash(f"/community/members/{telegram_id}", error=str(exc))
 
 
 @router.get("/avatar/{telegram_id}")

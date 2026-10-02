@@ -7,9 +7,14 @@ export default function SubmitPage() {
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = () => {
-    api.mySubmissions().then((data) => setItems(data.items)).catch((e) => setError(e.message));
+    api
+      .mySubmissions()
+      .then((data) => setItems(data.items))
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
@@ -45,7 +50,8 @@ export default function SubmitPage() {
         </Button>
       </Card>
       <h2>Мои материалы</h2>
-      {!items.length && <Loading />}
+      {loading && <Loading />}
+      {!loading && !items.length && !error && <Card>Пока нет.</Card>}
       {items.map((item) => (
         <Card key={item.id}>
           #{item.id} · {item.kind} · {item.status}

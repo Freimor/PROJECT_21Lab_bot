@@ -1,10 +1,14 @@
-import { HashRouter, NavLink, Route, Routes } from "react-router-dom";
+import { HashRouter, Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { AppProvider } from "./context";
 import HomePage from "./pages/Home";
 import FaqPage from "./pages/Faq";
 import FaqArticlePage from "./pages/FaqArticle";
 import JoinPage from "./pages/Join";
 import ProfilePage from "./pages/Profile";
+import MarketPage from "./pages/Market";
+import MarketCardPage from "./pages/MarketCard";
+import MarketMinePage from "./pages/MarketMine";
+import MarketOrdersPage from "./pages/MarketOrders";
 import ShopPage from "./pages/Shop";
 import JobsPage from "./pages/Jobs";
 import JobDetailPage from "./pages/JobDetail";
@@ -40,6 +44,10 @@ export default function App() {
           <Route path="/join" element={<JoinPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/shop" element={<ShopPage />} />
+          <Route path="/market" element={<MarketPage />} />
+          <Route path="/market/mine" element={<MarketMinePage />} />
+          <Route path="/market/orders" element={<MarketOrdersPage />} />
+          <Route path="/market/:id" element={<MarketCardPage />} />
           <Route path="/jobs" element={<JobsPage />} />
           <Route path="/jobs/:id" element={<JobDetailPage />} />
           <Route path="/order" element={<OrderServicePage />} />
@@ -53,6 +61,7 @@ export default function App() {
           <Route path="/staff/orders" element={<StaffOrdersPage />} />
           <Route path="/staff/people" element={<StaffPeoplePage />} />
           <Route path="/staff/settings" element={<StaffSettingsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <nav className="bottom-nav">
           <NavLinkItem to="/">Главная</NavLinkItem>

@@ -5,7 +5,7 @@ from __future__ import annotations
 import calendar
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from sqlalchemy import delete, func, or_, select
@@ -62,6 +62,21 @@ _MONTH_NAMES = (
     "ноябрь",
     "декабрь",
 )
+_SHORT_MONTHS = (
+    "янв",
+    "фев",
+    "мар",
+    "апр",
+    "май",
+    "июн",
+    "июл",
+    "авг",
+    "сен",
+    "окт",
+    "ноя",
+    "дек",
+)
+_MIN_BAR_PCT = 0.85
 _LINK_MODELS = {
     ProjectLinkKind.ORDER: Order,
     ProjectLinkKind.QUEST: CommunityQuest,
@@ -177,6 +192,40 @@ class MonthCalendar:
 
 
 @dataclass(frozen=True)
+class TimelineMonth:
+    label: str
+    left: float
+    width: float
+
+
+@dataclass(frozen=True)
+class TimelineRow:
+    id: int
+    title: str
+    project_title: str
+    color: str
+    href: str
+    starts_on: date
+    ends_on: date
+    left: float
+    width: float
+    continues_left: bool
+    continues_right: bool
+    state: str
+
+
+@dataclass(frozen=True)
+class YearTimeline:
+    year: int
+    years: list[int]
+    days: int
+    months: list[TimelineMonth]
+    today_pct: float | None
+    today: date
+    rows: list[TimelineRow]
+
+
+@dataclass(frozen=True)
 class FolderCrumb:
     id: int | None
     name: str
@@ -228,6 +277,14 @@ def parse_day(value: str) -> date | None:
         return date.fromisoformat(text)
     except ValueError as exc:
         raise ProjectError("Некорректная дата") from exc
+
+
+def resolve_year(raw: str | None, today: date) -> int:
+    if raw and raw.strip().isdigit():
+        year = int(raw.strip())
+        if 2000 <= year <= 2100:
+            return year
+    return today.year
 
 
 def resolve_month(raw: str | None, today: date) -> tuple[int, int]:
@@ -937,6 +994,123 @@ async def month_calendar(
             )
         weeks.append(days)
     return MonthCalendar(label=month_label(year, month), year=year, month=month, weeks=weeks)
+
+
+def _task_span(task: ProjectTask) -> tuple[date, date] | None:
+    if task.start_on is not None and task.due_on is not None:
+        start, end = task.start_on, task.due_on
+        if end < start:
+            start, end = end, start
+        return start, end
+    if task.start_on is not None:
+        return task.start_on, task.start_on
+    if task.due_on is not None:
+        return task.due_on, task.due_on
+    return None
+
+
+def _timeline_state(start: date, end: date, today: date) -> str:
+    if end < today:
+        return "past"
+    if start <= today <= end:
+        return "active"
+    return "upcoming"
+
+
+async def year_timeline(
+    session: AsyncSession,
+    year: int,
+    *,
+    today: date,
+    assignee_id: int | None = None,
+) -> YearTimeline:
+    jan1 = date(year, 1, 1)
+    dec31 = date(year, 12, 31)
+    days = (dec31 - jan1).days + 1
+    months = []
+    for month in range(1, 13):
+        start = date(year, month, 1)
+        end = date(year, month + 1, 1) - timedelta(days=1) if month < 12 else dec31
+        months.append(
+            TimelineMonth(
+                label=_SHORT_MONTHS[month - 1],
+                left=round((start - jan1).days / days * 100, 4),
+                width=round(((end - start).days + 1) / days * 100, 4),
+            )
+        )
+    today_pct = None
+    if today.year == year:
+        today_pct = round(((today - jan1).days + 0.5) / days * 100, 4)
+
+    dated = ProjectTask.start_on.is_not(None) | ProjectTask.due_on.is_not(None)
+    year_stmt = select(ProjectTask.start_on, ProjectTask.due_on).where(dated)
+    if assignee_id is not None:
+        year_stmt = year_stmt.where(
+            ProjectTask.id.in_(
+                select(ProjectTaskAssignee.task_id).where(
+                    ProjectTaskAssignee.user_id == assignee_id
+                )
+            )
+        )
+    years = {today.year, year}
+    for start_on, due_on in (await session.execute(year_stmt)).all():
+        if start_on is not None:
+            years.add(start_on.year)
+        if due_on is not None:
+            years.add(due_on.year)
+
+    stmt = (
+        select(ProjectTask, Project.title)
+        .join(Project, Project.id == ProjectTask.project_id)
+        .where(_overlap_clause(jan1, dec31))
+        .order_by(ProjectTask.start_on, ProjectTask.due_on, ProjectTask.id)
+    )
+    if assignee_id is not None:
+        stmt = stmt.where(
+            ProjectTask.id.in_(
+                select(ProjectTaskAssignee.task_id).where(
+                    ProjectTaskAssignee.user_id == assignee_id
+                )
+            )
+        )
+    rows: list[TimelineRow] = []
+    for task, project_title in (await session.execute(stmt)).all():
+        span = _task_span(task)
+        if span is None:
+            continue
+        start_on, end_on = span
+        vis_start = max(start_on, jan1)
+        vis_end = min(end_on, dec31)
+        left = (vis_start - jan1).days / days * 100
+        width = max(((vis_end - vis_start).days + 1) / days * 100, _MIN_BAR_PCT)
+        if left + width > 100:
+            left = max(0.0, 100.0 - width)
+        rows.append(
+            TimelineRow(
+                id=task.id,
+                title=task.title,
+                project_title=str(project_title),
+                color=task.color,
+                href=f"/projects/{task.project_id}#task-{task.id}",
+                starts_on=start_on,
+                ends_on=end_on,
+                left=round(left, 4),
+                width=round(width, 4),
+                continues_left=start_on < jan1,
+                continues_right=end_on > dec31,
+                state=_timeline_state(start_on, end_on, today),
+            )
+        )
+    rows.sort(key=lambda row: (row.starts_on, row.id))
+    return YearTimeline(
+        year=year,
+        years=sorted(years),
+        days=days,
+        months=months,
+        today_pct=today_pct,
+        today=today,
+        rows=rows,
+    )
 
 
 async def list_docs(session: AsyncSession, project_id: int) -> list[ProjectDoc]:

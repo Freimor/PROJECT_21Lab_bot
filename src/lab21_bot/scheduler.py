@@ -165,14 +165,15 @@ def create_scheduler(
             if last_id_setting and isinstance(last_id_setting.value.get("value"), int):
                 exclude = int(last_id_setting.value["value"])
             from lab21_bot.services.seasons import active_season
+            from lab21_bot.services.templates import resolve_active_meme_collections
 
             season = await active_season(session, today=now.date())
-            collection = season.meme_collection if season is not None else "default"
+            collections = await resolve_active_meme_collections(session, season)
             template = await pick_template(
                 session,
                 TemplateKind.MEME,
                 exclude_id=exclude,
-                collection_key=collection,
+                collection_keys=collections,
             )
             if template is None:
                 return
@@ -181,6 +182,7 @@ def create_scheduler(
                 flood.chat_id,
                 meme_post_html_from_template(template),
                 media=list(template.media or []) or None,
+                upload_dir=settings.upload_dir,
                 message_thread_id=flood.thread_id,
                 parse_mode="HTML",
             )

@@ -5,17 +5,25 @@ import { Button, Card, ErrorBox, Layout, Loading } from "../components";
 export default function StaffOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = () => {
-    api.staffOrders().then((data) => setOrders(data.orders)).catch((e) => setError(e.message));
+    setLoading(true);
+    api
+      .staffOrders()
+      .then((data) => setOrders(data.orders))
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
 
+  if (loading) return <Layout title="Заказы staff"><Loading /></Layout>;
+
   return (
     <Layout title="Заказы staff">
       {error && <ErrorBox message={error} />}
-      {!orders.length && !error && <Loading />}
+      {!orders.length && !error && <Card>Заказов нет.</Card>}
       {orders.map((order) => (
         <Card key={order.id}>
           <p>#{order.id} · {order.product_name} × {order.qty}</p>

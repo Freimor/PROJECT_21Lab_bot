@@ -10,6 +10,18 @@
 <div class="panel" id="collections">
   <h2>Коллекции мемов</h2>
   <p class="muted" style="margin-top:0">Добавление и удаление пулов для автопостинга и сезонов.</p>
+  {% if active_season %}
+  <p class="muted" style="margin-top:0">
+    Сейчас идёт сезон «{{ active_season.title }}» до {{ active_season.ends_on.strftime('%d.%m.%Y') }}.
+    Ивент сбрасывает выбор на коллекцию <code>{{ active_collections[0] }}</code>.
+    После окончания снова будет <code>default</code>.
+  </p>
+  {% else %}
+  <p class="muted" style="margin-top:0">
+    Сезонного ивента нет. Отметьте коллекции, из которых автопостинг берёт мемы.
+  </p>
+  {% endif %}
+  <form id="active-collections-form" method="post" action="/publications/memes/collections/active"></form>
   <form method="post" action="/publications/memes/collections/create" class="form-grid" style="margin-bottom:1rem">
     <label>Новая коллекция
       <input
@@ -31,6 +43,7 @@
         <tr>
           <th>Ключ</th>
           <th>Мемов</th>
+          <th>Сейчас</th>
           <th></th>
         </tr>
       </thead>
@@ -41,6 +54,18 @@
             <a href="/publications/memes?collection={{ col.key }}&sort={{ 'asc' if reactions_asc else 'desc' }}">{{ col.key }}</a>
           </td>
           <td>{{ col.meme_count }}</td>
+          <td>
+            <input
+              form="active-collections-form"
+              type="checkbox"
+              name="keys"
+              value="{{ col.key }}"
+              aria-label="Использовать {{ col.key }}"
+              style="width:1.1rem;height:1.1rem;padding:0;accent-color:#ff7a25"
+              {% if col.key in active_collections %}checked{% endif %}
+              {% if active_season %}disabled{% endif %}
+            >
+          </td>
           <td class="actions">
             {% if col.key == 'default' %}
             <span class="muted">системная</span>
@@ -66,6 +91,11 @@
       </tbody>
     </table>
   </div>
+  {% if not active_season %}
+  <div class="actions" style="margin-top:0.75rem">
+    <button form="active-collections-form" type="submit">Сохранить</button>
+  </div>
+  {% endif %}
   {% endif %}
 </div>
 

@@ -443,17 +443,20 @@ async def purchase(
         reward = product.respect_reward
         if reward is None:
             reward = skills_respect_sum(list(product.skill_ids))
-        await create_service_job(
-            session,
-            customer_id=buyer_id,
-            skill_ids=list(product.skill_ids),
-            description=f"{product.name}\n{product.description}".strip(),
-            price=total,
-            respect_reward=reward,
-            product_id=product.id,
-            order_id=order.id,
-            reserve_funds=False,
-        )
+        try:
+            await create_service_job(
+                session,
+                customer_id=buyer_id,
+                skill_ids=list(product.skill_ids),
+                description=f"{product.name}\n{product.description}".strip(),
+                price=total,
+                respect_reward=reward,
+                product_id=product.id,
+                order_id=order.id,
+                reserve_funds=False,
+            )
+        except JobError as exc:
+            raise EconomyError(str(exc)) from exc
     await session.flush()
     return order
 
@@ -485,7 +488,7 @@ async def resolve_order(
     granted_rank: CommunityRank | None = None
     if approve:
         order.status = OrderStatus.FULFILLED
-        if order.product.grants_rank is not None:
+        if order.product.grants_rank is not None and buyer.staff_role is None:
             previous_rank = buyer.rank
             buyer.rank = order.product.grants_rank
             if buyer.rank is not previous_rank:

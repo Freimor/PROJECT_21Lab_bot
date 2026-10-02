@@ -24,6 +24,10 @@ export default function OrderServicePage() {
 
   const submit = async () => {
     setError(null);
+    if (!Number.isFinite(price) || price < 0) {
+      setError("Стоимость не может быть отрицательной");
+      return;
+    }
     try {
       await api.createJob({
         description,

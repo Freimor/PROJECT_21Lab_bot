@@ -6,7 +6,7 @@ from typing import cast
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lab21_bot.models import AdminAction, StaffRole, User
+from lab21_bot.models import AdminAction, CommunityRank, StaffRole, User
 
 
 class Permission(StrEnum):
@@ -18,6 +18,9 @@ class Permission(StrEnum):
     MODERATE_CONTENT = "moderate_content"
     MODERATE_ORDERS = "moderate_orders"
     CREATE_STAFF_CONTENT = "create_staff_content"
+    FAIR_MODERATE = "fair_moderate"
+    FAIR_WAREHOUSE = "fair_warehouse"
+    FAIR_DISPUTES = "fair_disputes"
 
 
 _ALL_EXCEPT_SYSTEM = frozenset(p for p in Permission if p is not Permission.MANAGE_SYSTEM)
@@ -37,6 +40,9 @@ ROLE_PERMISSIONS: dict[StaffRole, frozenset[Permission]] = {
             Permission.MODERATE_CONTENT,
             Permission.MODERATE_ORDERS,
             Permission.CREATE_STAFF_CONTENT,
+            Permission.FAIR_MODERATE,
+            Permission.FAIR_WAREHOUSE,
+            Permission.FAIR_DISPUTES,
         }
     ),
 }
@@ -148,10 +154,16 @@ async def set_staff_role(
     previous = target.staff_role
     target.staff_role = role
     if role is not None:
+        target.rank = None
         target.balance = 0
         target.respect = 0
         target.is_approved = True
         target.is_active = True
+    else:
+        if target.rank is None:
+            target.rank = CommunityRank.NOVICE
+        target.can_use_testuser = False
+        target.testuser_active = False
     session.add(
         AdminAction(
             actor_id=actor.telegram_id,

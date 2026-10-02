@@ -23,6 +23,9 @@ _DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         Permission.MODERATE_CONTENT.value,
         Permission.MODERATE_ORDERS.value,
         Permission.CREATE_STAFF_CONTENT.value,
+        Permission.FAIR_MODERATE.value,
+        Permission.FAIR_WAREHOUSE.value,
+        Permission.FAIR_DISPUTES.value,
     ],
 }
 
@@ -269,6 +272,9 @@ PERMISSION_LABELS: dict[str, str] = {
     Permission.MODERATE_CONTENT.value: "Модерация контента",
     Permission.MODERATE_ORDERS.value: "Заказы",
     Permission.CREATE_STAFF_CONTENT.value: "Служебные посты",
+    Permission.FAIR_MODERATE.value: "Ярмарка: витрина",
+    Permission.FAIR_WAREHOUSE.value: "Ярмарка: склад и выдача",
+    Permission.FAIR_DISPUTES.value: "Ярмарка: споры",
 }
 
 

@@ -137,13 +137,23 @@ async def projects_page(
     request: Request,
     session: DbSession,
     user: CurrentUser,
-) -> HTMLResponse:
+) -> Response:
+    projects = await list_projects(session)
+    if projects:
+        return RedirectResponse(
+            _with_query(
+                f"/projects/{projects[0].id}",
+                message=_message(request) or "",
+                error=_error(request) or "",
+            ),
+            status_code=303,
+        )
     return await render(
         request,
         "projects.html",
         user=user,
         session=session,
-        projects=await list_projects(session),
+        projects=projects,
         message=_message(request),
         error=_error(request),
     )
@@ -201,6 +211,7 @@ async def project_board(
         )
         options = await link_options(session)
         staff = await list_staff(session)
+        projects = await list_projects(session)
     except ProjectError as exc:
         raise _not_found(exc) from exc
     return await render(
@@ -209,6 +220,7 @@ async def project_board(
         user=user,
         session=session,
         project=board.project,
+        projects=projects,
         board=board,
         staff=staff,
         link_options=options,

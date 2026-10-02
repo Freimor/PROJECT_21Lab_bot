@@ -728,6 +728,126 @@ button.warn {
   align-items: start;
 }
 
+.directory-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.directory-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.directory-filters input,
+.directory-filters select {
+  min-width: 10rem;
+}
+
+.person-row {
+  cursor: pointer;
+}
+
+.person-row:hover td {
+  background: rgba(255, 122, 37, 0.08);
+}
+
+.directory-table {
+  width: 100%;
+}
+
+.directory-table th,
+.directory-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.directory-table .skill-cell {
+  width: 100%;
+  max-width: 0;
+}
+
+.skill-line {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.skill-line .badge {
+  flex: 0 0 auto;
+}
+
+.skill-line .badge[hidden] {
+  display: none !important;
+}
+
+.skill-line .badge.is-clipped {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resume-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.resume-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.resume-facts {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.45rem 0.75rem;
+  margin: 0;
+}
+
+.resume-facts dt {
+  color: var(--muted);
+}
+
+.resume-facts dd {
+  margin: 0;
+}
+
+.resume-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.resume-actions .panel {
+  margin: 0;
+}
+
+.catalog-add {
+  margin-top: 1rem;
+}
+
+.catalog-add summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.catalog-add form {
+  margin-top: 0.85rem;
+}
+
 .settings-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
@@ -1430,7 +1550,8 @@ button.warn {
     padding: 1.25rem;
   }
 
-  .people-layout {
+  .people-layout,
+  .resume-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1559,6 +1680,15 @@ button.warn {
   align-items: end;
   justify-content: space-between;
   margin-bottom: 0.75rem;
+}
+
+.project-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  min-width: 12rem;
 }
 
 .board-filters {

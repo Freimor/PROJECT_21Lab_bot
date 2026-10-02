@@ -2,44 +2,28 @@
 {% block title %}Проекты — Lab21 Admin{% endblock %}
 {% block content %}
 <h1 class="page-title">Проекты</h1>
-<p class="page-sub">Доска задач, календарь, документы и файлы команды.</p>
+<p class="page-sub">Создайте проект — откроется доска с колонками «Бэклог», «В работе» и «Готово».</p>
 
-<div class="split-layout">
-  <section class="panel">
-    <h2>Новый проект</h2>
-    <form method="post" action="/projects" class="stack">
-      <label>Название <input name="title" required maxlength="200"></label>
-      <label>Описание <textarea name="description" rows="3"></textarea></label>
-      <button type="submit">Создать</button>
-    </form>
-  </section>
-  <section class="panel">
-    <h2>Список</h2>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th>Проект</th><th>Задачи</th><th></th></tr>
-        </thead>
-        <tbody>
-          {% for item in projects %}
-          <tr>
-            <td>
-              <a href="/projects/{{ item.id }}"><strong>{{ item.title }}</strong></a>
-              {% if item.description %}<div class="muted">{{ item.description }}</div>{% endif %}
-            </td>
-            <td>{{ item.task_count }}</td>
-            <td class="actions">
-              <form method="post" action="/projects/{{ item.id }}/delete" onsubmit="return confirm('Удалить проект и его файлы?')">
-                <button type="submit" class="danger">Удалить</button>
-              </form>
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="3" class="muted">Проектов пока нет</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+<section class="panel">
+  <h2>Новый проект</h2>
+  <form method="post" action="/projects" class="stack">
+    <label>Название <input name="title" required maxlength="200" placeholder="Например, Лаба"></label>
+    <label>Описание <textarea name="description" rows="2"></textarea></label>
+    <button type="submit">Создать и открыть доску</button>
+  </form>
+</section>
+
+<div class="board" aria-label="Пустая доска">
+  {% for title in ["Бэклог", "В работе", "Готово"] %}
+  <section class="board-col">
+    <header class="board-col-head">
+      <strong>{{ title }}</strong>
+      <span class="muted">0</span>
+    </header>
+    <div class="board-list">
+      {% if loop.first %}<p class="muted">Карточки появятся после создания проекта.</p>{% endif %}
     </div>
   </section>
+  {% endfor %}
 </div>
 {% endblock %}

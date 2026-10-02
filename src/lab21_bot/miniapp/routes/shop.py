@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+import structlog
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -19,6 +20,7 @@ from lab21_bot.services.store import purchase, visible_products
 from lab21_bot.telegram_client import create_bot
 
 router = APIRouter(tags=["miniapp-shop"])
+logger = structlog.get_logger(__name__)
 
 
 class ShopOrderBody(BaseModel):
@@ -54,35 +56,44 @@ async def shop_order(
     except EconomyError as exc:
         raise map_service_error(exc) from exc
 
+    loaded = await session.scalar(
+        select(Order).where(Order.id == order.id).options(selectinload(Order.product))
+    )
+    if loaded is None:
+        raise map_service_error(EconomyError("Заказ не сохранился"))
+    order = loaded
     product = order.product
     service_job = (
         await get_job_by_order_id(session, order.id)
         if product.kind is ProductKind.SERVICE
         else None
     )
-    async with create_bot(settings) as bot:
-        if service_job is not None:
-            await publish_service_job(bot, session, settings, service_job, user)
-            await notify_job_subscribers(bot, session, service_job)
-        await sync_shop_card(bot, product, settings, upload_dir=settings.upload_dir)
-        shop_body = (
-            f"[{product.article}] {product.name} × {order.quantity}\n"
-            f"Покупатель: {user.full_name} ({user.telegram_id})"
-            + (
-                "\nУслуга опубликована в топике заказов."
-                if product.kind is ProductKind.SERVICE
-                else ""
+    try:
+        async with create_bot(settings) as bot:
+            if service_job is not None:
+                await publish_service_job(bot, session, settings, service_job, user)
+                await notify_job_subscribers(bot, session, service_job)
+            await sync_shop_card(bot, product, settings, upload_dir=settings.upload_dir)
+            shop_body = (
+                f"[{product.article}] {product.name} × {order.quantity}\n"
+                f"Покупатель: {user.full_name} ({user.telegram_id})"
+                + (
+                    "\nУслуга опубликована в топике заказов."
+                    if product.kind is ProductKind.SERVICE
+                    else ""
+                )
             )
-        )
-        await notify_admin_event(
-            session,
-            settings,
-            "shop_order",
-            title=f"Новый заказ #{order.id}",
-            body=shop_body,
-            link="/shop",
-            bot=bot,
-        )
+            await notify_admin_event(
+                session,
+                settings,
+                "shop_order",
+                title=f"Новый заказ #{order.id}",
+                body=shop_body,
+                link="/shop",
+                bot=bot,
+            )
+    except Exception:
+        logger.exception("miniapp_shop_order_notify_failed", order_id=order.id)
     return order_to_dict(order)
 
 

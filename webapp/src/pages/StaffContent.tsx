@@ -5,17 +5,25 @@ import { Button, Card, ErrorBox, Layout, Loading } from "../components";
 export default function StaffContentPage() {
   const [items, setItems] = useState<Submission[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = () => {
-    api.staffContentQueue().then((data) => setItems(data.items)).catch((e) => setError(e.message));
+    setLoading(true);
+    api
+      .staffContentQueue()
+      .then((data) => setItems(data.items))
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
 
+  if (loading) return <Layout title="Модерация"><Loading /></Layout>;
+
   return (
     <Layout title="Модерация">
       {error && <ErrorBox message={error} />}
-      {!items.length && !error && <Loading />}
+      {!items.length && !error && <Card>Очередь пуста.</Card>}
       {items.map((item) => (
         <Card key={item.id}>
           <p>#{item.id} · {item.kind}</p>

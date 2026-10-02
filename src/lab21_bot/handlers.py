@@ -179,6 +179,7 @@ from lab21_bot.services.store import (
     resolve_order,
     update_product,
 )
+from lab21_bot.services.testuser import TestUserError, toggle_testuser
 from lab21_bot.services.user_messages import (
     message_content_rejected,
     message_order_cancelled,
@@ -528,7 +529,6 @@ def create_router(
         "order",
         "transfer",
         "card",
-        "bow",
         "bless",
         "staff",
         "post",
@@ -2506,6 +2506,37 @@ def create_router(
         except (ValueError, AccessDenied) as error:
             await message.answer(str(error))
 
+    @router.message(Command("testuser"))
+    async def testuser_command(message: Message, bot: Bot) -> None:
+        if not message.from_user:
+            return
+        if message.chat.type != "private":
+            await message.answer("Эту команду пиши в личку бота.")
+            return
+        try:
+            async with factory.begin() as session:
+                actor = await current_user(session, message.from_user.id)
+                active = await toggle_testuser(session, actor)
+            text = (
+                "Миниапп сейчас открывается как тестовый участник. "
+                "Повтори /testuser, чтобы вернуться в свой аккаунт."
+                if active
+                else "Миниапп снова открывается твоим аккаунтом."
+            )
+            await message.answer(text)
+            try:
+                async with factory() as session:
+                    actor = await current_user(session, message.from_user.id)
+                    await sync_user_commands(bot, actor)
+            except Exception as exc:
+                _log.info(
+                    "testuser_menu_sync_failed",
+                    user_id=message.from_user.id,
+                    error=str(exc),
+                )
+        except TestUserError as error:
+            await message.answer(str(error))
+
     @router.callback_query(F.data == "menu:staff")
     async def staff_menu_callback(callback: CallbackQuery, bot: Bot) -> None:
         if callback.from_user is None:
@@ -3390,6 +3421,9 @@ def create_router(
             seen.add(fid)
             unique_media.append(entry)
         text = clean_feedback_text(lead.text or lead.caption)
+        if not text and not unique_media:
+            await delete_quietly(lead)
+            return
         author_name = lead.from_user.full_name if lead.from_user else "Unknown"
         author_username = lead.from_user.username if lead.from_user else None
         author_tg_id = lead.from_user.id if lead.from_user else None

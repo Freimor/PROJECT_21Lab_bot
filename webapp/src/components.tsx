@@ -15,6 +15,11 @@ export function Layout({ children, title }: { children: React.ReactNode; title?:
           </div>
         )}
       </header>
+      {me?.is_test_user && (
+        <p className="test-banner">
+          Сейчас ты тестовый участник. Команда /testuser в боте вернёт твой аккаунт.
+        </p>
+      )}
       {title && <h1 className="page-title">{title}</h1>}
       <main className="main">{children}</main>
     </div>

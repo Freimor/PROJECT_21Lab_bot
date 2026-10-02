@@ -1,9 +1,10 @@
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from lab21_bot.models import CommunityRank, StaffRole, User
+from lab21_bot.models import CommunityRank, ContentTemplate, StaffRole, TemplateKind, User
 from lab21_bot.services.bless import BlessError, bless_member
 from lab21_bot.services.presence import (
     clear_cooldowns_for_tests,
@@ -13,7 +14,14 @@ from lab21_bot.services.presence import (
 from lab21_bot.services.quests import QuestError, complete_quest, create_quest, join_quest
 from lab21_bot.services.ritual import RitualError, perform_ritual
 from lab21_bot.services.seasons import SeasonError, active_season, create_season
-from zoneinfo import ZoneInfo
+from lab21_bot.services.templates import (
+    TemplateError,
+    active_meme_collection_key,
+    create_meme_collection,
+    pick_template,
+    resolve_active_meme_collections,
+    set_active_meme_collections,
+)
 
 
 async def test_ritual_streak_and_idempotent_day(session: AsyncSession) -> None:
@@ -377,6 +385,8 @@ async def test_season_active_window(session: AsyncSession) -> None:
     active = await active_season(session, today=date(2026, 10, 31))
     assert active is not None
     assert active.meme_collection == "halloween"
+    assert active_meme_collection_key(None) == "default"
+    assert active_meme_collection_key(active) == "halloween"
 
     with pytest.raises(SeasonError):
         await create_season(
@@ -388,6 +398,54 @@ async def test_season_active_window(session: AsyncSession) -> None:
             starts_on=date(2026, 1, 1),
             ends_on=date(2026, 1, 2),
         )
+
+
+async def test_checked_collections_reset_by_season(session: AsyncSession) -> None:
+    lord = User(telegram_id=2, full_name="Лорд", staff_role=StaffRole.LORD, is_approved=True)
+    session.add(lord)
+    await session.flush()
+    await create_meme_collection(session, lord, "anime")
+    await create_meme_collection(session, lord, "halloween")
+    saved = await set_active_meme_collections(session, lord, ["anime", "default"], season=None)
+    assert saved == ["anime", "default"]
+    assert await resolve_active_meme_collections(session, None) == ["anime", "default"]
+
+    season = await create_season(
+        session,
+        lord,
+        code="halloween-box",
+        title="Dark Halloween",
+        description="",
+        starts_on=date(2026, 10, 25),
+        ends_on=date(2026, 11, 5),
+        meme_collection="halloween",
+    )
+    assert await resolve_active_meme_collections(session, season) == ["halloween"]
+    with pytest.raises(TemplateError):
+        await set_active_meme_collections(session, lord, ["anime"], season=season)
+    assert await resolve_active_meme_collections(session, None) == ["default"]
+
+    session.add_all(
+        [
+            ContentTemplate(
+                kind=TemplateKind.MEME, title="a", body="a", collection_key="anime", is_active=True
+            ),
+            ContentTemplate(
+                kind=TemplateKind.MEME,
+                title="h",
+                body="h",
+                collection_key="hardcore",
+                is_active=True,
+            ),
+        ]
+    )
+    await session.flush()
+    only_anime = await pick_template(session, TemplateKind.MEME, collection_keys=["anime"])
+    assert only_anime is not None
+    assert only_anime.collection_key == "anime"
+    either = await pick_template(session, TemplateKind.MEME, collection_keys=["anime", "hardcore"])
+    assert either is not None
+    assert either.collection_key in {"anime", "hardcore"}
 
 
 def test_season_announce_placeholders_match_format_fields() -> None:

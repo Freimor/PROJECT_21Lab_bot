@@ -76,12 +76,13 @@ async def main() -> None:
     dispatcher.include_router(create_router(settings, factory, llm))
     scheduler = create_scheduler(bot, settings, factory)
 
-    from lab21_bot.services.commands import clear_default_commands
+    from lab21_bot.services.commands import sync_command_menu
 
     try:
-        await clear_default_commands(bot)
+        async with factory.begin() as session:
+            await sync_command_menu(bot, session)
     except Exception as exc:
-        log.warning("clear_default_commands_failed", error=str(exc))
+        log.warning("sync_command_menu_failed", error=str(exc))
     scheduler.start()
     await notify_restart_result(bot, factory, settings)
     from lab21_bot.services.quests import refresh_open_quest_posts

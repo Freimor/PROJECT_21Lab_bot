@@ -27,7 +27,15 @@ a {
 
 .app {
   min-height: 100vh;
-  padding-bottom: 72px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
+.test-banner {
+  margin: 0;
+  padding: 10px 16px;
+  background: var(--secondary);
+  color: var(--hint);
+  font-size: 14px;
 }
 
 .header {
@@ -67,9 +75,10 @@ a {
   bottom: 0;
   left: 0;
   right: 0;
+  z-index: 20;
   display: flex;
   gap: 4px;
-  padding: 8px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
   background: var(--secondary);
   border-top: 1px solid rgba(127, 127, 127, 0.2);
   overflow-x: auto;
@@ -204,6 +213,40 @@ label {
   justify-content: space-between;
   gap: 8px;
   align-items: center;
+  padding: 8px 0;
+}
+
+.list-item .btn {
+  width: auto;
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+.market-photo {
+  width: 100%;
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.pickup-code {
+  font-family: ui-monospace, monospace;
+  font-size: 1.8rem;
+  letter-spacing: 0.14em;
+  text-align: center;
+  margin: 8px 0;
+}
+
+.qr-wrap {
+  display: flex;
+  justify-content: center;
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.qr-wrap svg {
+  width: 180px;
+  height: 180px;
 }
 
 .badge {

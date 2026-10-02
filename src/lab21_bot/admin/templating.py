@@ -55,6 +55,9 @@ def nav_flags(user: User) -> dict[str, bool]:
         "can_shop": can_store or can_orders,
         "can_store": can_store,
         "can_orders": can_orders,
+        "can_market": has_permission(user, Permission.FAIR_MODERATE)
+        or has_permission(user, Permission.FAIR_WAREHOUSE)
+        or has_permission(user, Permission.FAIR_DISPUTES),
         "can_publications": has_permission(user, Permission.MODERATE_CONTENT)
         or has_permission(user, Permission.MANAGE_SETTINGS),
         "can_economy": has_permission(user, Permission.MANAGE_ECONOMY),

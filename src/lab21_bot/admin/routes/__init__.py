@@ -9,6 +9,7 @@ from lab21_bot.admin.routes import (
     feedback,
     gamification,
     llm_posts,
+    market,
     people,
     projects,
     publications,
@@ -22,6 +23,7 @@ api_router.include_router(dashboard.router)
 api_router.include_router(people.router)
 api_router.include_router(projects.router)
 api_router.include_router(shop.router)
+api_router.include_router(market.router)
 api_router.include_router(publications.router)
 api_router.include_router(llm_posts.router)
 api_router.include_router(settings.router)
