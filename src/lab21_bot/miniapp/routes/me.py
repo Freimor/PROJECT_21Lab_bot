@@ -123,7 +123,9 @@ async def get_history(session: DbSession, user: ApprovedUser) -> dict:
                 "created_at": entry.created_at.isoformat(),
                 "delta": entry.delta,
                 "reason": entry.reason,
-                "type": entry.type.value if hasattr(entry.type, "value") else entry.type,
+                "type": entry.entry_type.value
+                if hasattr(entry.entry_type, "value")
+                else entry.entry_type,
             }
             for entry in entries
         ]

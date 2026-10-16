@@ -426,10 +426,9 @@ async def purchase(
     )
     session.add(order)
     await session.flush()
-    group = f"order:{idempotency_key}"
     session.add(
         LedgerEntry(
-            transaction_group=group,
+            transaction_group=str(uuid.uuid4()),
             idempotency_key=f"purchase:{idempotency_key}",
             initiator_id=buyer_id,
             account_user_id=buyer_id,

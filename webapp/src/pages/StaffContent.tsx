@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, type Submission } from "../api";
 import { Button, Card, ErrorBox, Layout, Loading } from "../components";
+import { useStaffScreen } from "../staffAccess";
 
 export default function StaffContentPage() {
+  const { allowed, gate } = useStaffScreen("Модерация");
   const [items, setItems] = useState<Submission[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -16,8 +18,11 @@ export default function StaffContentPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    if (allowed) load();
+  }, [allowed]);
 
+  if (gate) return gate;
   if (loading) return <Layout title="Модерация"><Loading /></Layout>;
 
   return (

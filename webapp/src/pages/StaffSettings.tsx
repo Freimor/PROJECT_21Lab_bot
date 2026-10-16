@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { Button, Card, ErrorBox, Layout, Loading } from "../components";
+import { useStaffScreen } from "../staffAccess";
 
 export default function StaffSettingsPage() {
+  const { allowed, gate } = useStaffScreen("Настройки");
   const [settings, setSettings] = useState<Record<string, number> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!allowed) return;
     api.staffSettings().then(setSettings).catch((e) => setError(e.message));
-  }, []);
+  }, [allowed]);
 
+  if (gate) return gate;
   if (!settings && !error) return <Layout><Loading /></Layout>;
 
   return (

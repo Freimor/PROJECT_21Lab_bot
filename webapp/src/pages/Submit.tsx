@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type Submission } from "../api";
 import { Button, Card, ErrorBox, Layout, Loading } from "../components";
 
@@ -6,6 +6,7 @@ export default function SubmitPage() {
   const [items, setItems] = useState<Submission[]>([]);
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,13 +38,24 @@ export default function SubmitPage() {
       </Card>
       <Card>
         <label>Мем (фото/GIF)</label>
-        <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
         <Button
           onClick={async () => {
             if (!file) return;
-            await api.submitMeme(file, text);
-            setFile(null);
-            load();
+            setError(null);
+            try {
+              await api.submitMeme(file, text);
+              setFile(null);
+              if (fileInput.current) fileInput.current.value = "";
+              load();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Не получилось отправить");
+            }
           }}
         >
           Отправить мем

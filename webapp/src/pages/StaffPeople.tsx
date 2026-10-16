@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { Button, Card, ErrorBox, Layout, Loading } from "../components";
+import { useStaffScreen } from "../staffAccess";
 
 export default function StaffPeoplePage() {
+  const { allowed, gate } = useStaffScreen("Заявки");
   const [apps, setApps] = useState<Record<string, unknown>[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -16,8 +18,11 @@ export default function StaffPeoplePage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    if (allowed) load();
+  }, [allowed]);
 
+  if (gate) return gate;
   if (loading) return <Layout title="Заявки"><Loading /></Layout>;
 
   return (

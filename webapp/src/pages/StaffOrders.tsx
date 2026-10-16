@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, type Order } from "../api";
 import { Button, Card, ErrorBox, Layout, Loading } from "../components";
+import { useStaffScreen } from "../staffAccess";
 
 export default function StaffOrdersPage() {
+  const { allowed, gate } = useStaffScreen("Заказы staff");
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -16,8 +18,11 @@ export default function StaffOrdersPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    if (allowed) load();
+  }, [allowed]);
 
+  if (gate) return gate;
   if (loading) return <Layout title="Заказы staff"><Loading /></Layout>;
 
   return (

@@ -176,15 +176,29 @@ async def test_miniapp_shop_order_survives_telegram_failure(
             headers=headers,
             json={"product_id": product_id, "quantity": 1},
         )
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["product_id"] == product_id
-    assert body["total_price"] == 50
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["product_id"] == product_id
+        assert body["total_price"] == 50
+        history = await client.get("/api/miniapp/history", headers=headers)
+        assert history.status_code == 200, history.text
+        entries = history.json()["entries"]
+        assert entries[0]["delta"] == -50
+        assert entries[0]["type"]
 
     async with factory() as session:
+        from sqlalchemy import select
+
+        from lab21_bot.models import LedgerEntry
+
         saved = await session.get(User, 999001)
         assert saved is not None
         assert saved.balance == 65
+        ledger = await session.scalar(
+            select(LedgerEntry).where(LedgerEntry.account_user_id == 999001)
+        )
+        assert ledger is not None
+        assert len(ledger.transaction_group) <= 36
     await engine.dispose()
 
 
