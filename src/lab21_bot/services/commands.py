@@ -11,7 +11,6 @@ from aiogram.types import (
     BotCommandScopeChat,
     BotCommandScopeDefault,
 )
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lab21_bot.models import User
@@ -60,26 +59,17 @@ async def sync_user_commands(bot: Bot, user: User) -> None:
 
 
 async def sync_command_menu(bot: Bot, session: AsyncSession) -> None:
-    """Publish the slash-menu for private chats, groups, and known users.
+    """Publish the slash-menu for private chats and groups.
 
-    A per-user menu replaces the default one, so anyone who previously received
-    only /start must be updated or typing / stays almost empty.
+    Per-user scopes (testuser toggle, etc.) are synced on /start and login,
+    not O(users) on every bot restart.
     """
+    del session  # kept for call-site compatibility
     private = _commands(list(MENU_COMMANDS))
     group = _commands(list(GROUP_COMMANDS))
     await bot.set_my_commands([], scope=BotCommandScopeDefault())
     await bot.set_my_commands(private, scope=BotCommandScopeAllPrivateChats())
     await bot.set_my_commands(group, scope=BotCommandScopeAllGroupChats())
-    users = await session.scalars(select(User))
-    for user in users:
-        try:
-            await sync_user_commands(bot, user)
-        except Exception as exc:
-            logger.info(
-                "telegram_set_commands_failed",
-                user_id=user.telegram_id,
-                error=str(exc),
-            )
 
 
 async def sync_user_commands_http(bot_token: str, user: User) -> None:

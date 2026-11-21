@@ -83,3 +83,37 @@ async def test_telegram_request_failovers(monkeypatch: pytest.MonkeyPatch) -> No
     assert response.status_code == 200
     assert calls == ["socks5://bad:1080", "socks5://good:1080"]
     assert tc._preferred_proxy == "socks5://good:1080"
+
+
+@pytest.mark.asyncio
+async def test_telegram_httpx_probes_and_failovers(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = _settings(telegram_proxies="socks5://bad:1080,socks5://good:1080")
+    monkeypatch.setattr(tc, "_preferred_proxy", None)
+    probes: list[str | None] = []
+
+    class FakeClient:
+        def __init__(
+            self,
+            proxy: str | None = None,
+            timeout: float | None = None,
+        ) -> None:
+            self.proxy = proxy
+
+        async def get(self, url: str, **kwargs: object) -> httpx.Response:
+            probes.append(self.proxy)
+            if self.proxy == "socks5://bad:1080":
+                raise httpx.ConnectError("blocked")
+            return httpx.Response(
+                200,
+                json={"ok": True, "result": {"id": 1}},
+                request=httpx.Request("GET", url),
+            )
+
+        async def aclose(self) -> None:
+            return None
+
+    monkeypatch.setattr(tc.httpx, "AsyncClient", FakeClient)
+    async with tc.telegram_httpx(settings=settings, request_timeout=5.0) as client:
+        assert client.proxy == "socks5://good:1080"
+    assert probes == ["socks5://bad:1080", "socks5://good:1080"]
+    assert tc._preferred_proxy == "socks5://good:1080"

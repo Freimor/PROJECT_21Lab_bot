@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 
+import structlog
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -19,14 +21,17 @@ from lab21_bot.services.notify import send_telegram_message
 from lab21_bot.services.settings import get_int_setting
 from lab21_bot.services.templates import pick_template
 
+logger = structlog.get_logger(__name__)
+
 
 def create_scheduler(
-    bot: Bot,
+    bot: Bot | Callable[[], Bot],
     settings: Settings,
     factory: async_sessionmaker[AsyncSession],
 ) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=settings.tz)
     token = settings.telegram_bot_token.get_secret_value()
+    get_bot: Callable[[], Bot] = bot if callable(bot) else (lambda: bot)
 
     async def content_reminder() -> None:
         """Remind staff only when Будни are silent — do not auto-interview peers."""
@@ -51,7 +56,7 @@ def create_scheduler(
             if not silent:
                 return
         try:
-            await bot.send_message(
+            await get_bot().send_message(
                 settings.staff_chat_id,
                 "В «Буднях лабы» давно тихо. Нужна хроника прогресса — "
                 "попросите кого-то из участников или сотрудников начать пост через бота.",
@@ -73,11 +78,12 @@ def create_scheduler(
     async def expire_applications() -> None:
         async with factory.begin() as session:
             expired = await expire_pending_applications(session)
+        active_bot = get_bot()
         for application in expired:
             try:
                 from lab21_bot.keyboards import start_keyboard
 
-                await bot.send_message(
+                await active_bot.send_message(
                     application.user_id,
                     "Заявка на вступление отклонена автоматически: "
                     "неделя ожидания истекла без решения администратора.",
@@ -87,7 +93,7 @@ def create_scheduler(
                 pass
             kind_label = "сотрудник" if application.kind.value == "staff" else "послушник"
             try:
-                await bot.send_message(
+                await active_bot.send_message(
                     settings.staff_chat_id,
                     f"Заявка #{application.id} ({kind_label}) истекла автоматически.",
                 )
@@ -106,12 +112,14 @@ def create_scheduler(
     )
 
     async def publish_due_content() -> None:
-        async with factory.begin() as session:
+        async with factory() as session:
             due = await list_due_scheduled(session)
-            for item in due:
-                try:
+            item_ids = [item.id for item in due]
+        for item_id in item_ids:
+            try:
+                async with factory.begin() as session:
                     published = await publish_content_item(
-                        session, token, settings, item.id
+                        session, token, settings, item_id
                     )
                     await maybe_send_flood_teaser(
                         session,
@@ -121,8 +129,8 @@ def create_scheduler(
                         published.author,
                         story_thread_id=settings.main_thread_id,
                     )
-                except Exception:
-                    continue
+            except Exception:
+                logger.exception("publish_due_failed", item_id=item_id)
 
     scheduler.add_job(
         publish_due_content,
@@ -233,6 +241,7 @@ def create_scheduler(
 
     async def season_lifecycle() -> None:
         from lab21_bot.data import phrase
+        from lab21_bot.models import ContentKind
         from lab21_bot.services.destinations import destination_for_kind
         from lab21_bot.services.seasons import (
             format_season_announce,
@@ -240,7 +249,6 @@ def create_scheduler(
             seasons_needing_reminder,
             seasons_needing_start_announce,
         )
-        from lab21_bot.models import ContentKind
 
         today = datetime.now(settings.tz).date()
         async with factory.begin() as session:
@@ -253,9 +261,10 @@ def create_scheduler(
             starts = await seasons_needing_start_announce(session, today=today)
             ends = await seasons_needing_end_announce(session, today=today)
 
+        active_bot = get_bot()
         for season in reminders:
             try:
-                await bot.send_message(
+                await active_bot.send_message(
                     settings.staff_chat_id,
                     phrase(
                         "seasons",
@@ -275,6 +284,7 @@ def create_scheduler(
         try:
             dest = destination_for_kind(settings, ContentKind.IMPORTANT)
         except Exception:
+            logger.exception("season_destination_resolve_failed")
             dest = None
 
         for season in starts:
@@ -285,7 +295,7 @@ def create_scheduler(
                     else {}
                 )
                 try:
-                    await bot.send_message(
+                    await active_bot.send_message(
                         dest.chat_id,
                         format_season_announce(season, "start"),
                         **thread_kwargs,
@@ -305,7 +315,7 @@ def create_scheduler(
                     else {}
                 )
                 try:
-                    await bot.send_message(
+                    await active_bot.send_message(
                         dest.chat_id,
                         format_season_announce(season, "end"),
                         **thread_kwargs,

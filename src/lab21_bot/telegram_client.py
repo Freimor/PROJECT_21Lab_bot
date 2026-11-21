@@ -115,16 +115,29 @@ async def telegram_httpx(
     request_timeout: float = 30.0,
     settings: Settings | None = None,
 ) -> AsyncIterator[httpx.AsyncClient]:
-    """Yield httpx client on the preferred proxy (no multi-try)."""
+    """Yield httpx client on a working proxy (probe candidates like telegram_request)."""
     cfg = settings or get_settings()
-    proxy = _preferred_proxy
-    proxies = proxy_urls(cfg)
-    if proxy not in proxies and proxies:
-        proxy = proxies[0]
-    elif not proxies:
-        proxy = None
-    async with httpx.AsyncClient(proxy=proxy, timeout=request_timeout) as client:
-        yield client
+    errors: list[str] = []
+    token = cfg.telegram_bot_token.get_secret_value()
+    for proxy in _candidate_proxies(cfg):
+        client = httpx.AsyncClient(proxy=proxy, timeout=request_timeout)
+        try:
+            response = await client.get(f"{TELEGRAM_API}/bot{token}/getMe")
+            payload = response.json()
+            if not payload.get("ok"):
+                raise httpx.TransportError(str(payload.get("description", "getMe failed")))
+        except (httpx.TransportError, httpx.TimeoutException, ValueError) as exc:
+            errors.append(f"{_mask(proxy)}: {exc}")
+            logger.info("telegram_httpx_failover", proxy=_mask(proxy), error=str(exc))
+            await client.aclose()
+            continue
+        remember_proxy(proxy)
+        try:
+            yield client
+        finally:
+            await client.aclose()
+        return
+    raise httpx.TransportError("; ".join(errors) or "all telegram proxies failed")
 
 
 async def telegram_request(

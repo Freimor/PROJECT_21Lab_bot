@@ -183,19 +183,19 @@ async def list_due_scheduled(
 
 
 async def publication_stats(session: AsyncSession, lab_channel_id: int) -> dict[str, Any]:
-    queue_counts: dict[str, int] = {}
-    for kind in (ContentKind.STORY, ContentKind.IMPORTANT, ContentKind.MEME):
-        queue_counts[kind.value] = int(
-            await session.scalar(
-                select(func.count())
-                .select_from(ContentItem)
-                .where(
-                    ContentItem.status == ContentStatus.MODERATION,
-                    ContentItem.kind == kind,
-                )
-            )
-            or 0
-        )
+    queue_counts = {
+        ContentKind.STORY.value: 0,
+        ContentKind.IMPORTANT.value: 0,
+        ContentKind.MEME.value: 0,
+    }
+    rows = await session.execute(
+        select(ContentItem.kind, func.count())
+        .where(ContentItem.status == ContentStatus.MODERATION)
+        .group_by(ContentItem.kind)
+    )
+    for kind, count in rows.all():
+        if isinstance(kind, ContentKind) and kind.value in queue_counts:
+            queue_counts[kind.value] = int(count)
     scheduled_count = int(
         await session.scalar(
             select(func.count())

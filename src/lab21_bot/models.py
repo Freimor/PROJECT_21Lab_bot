@@ -19,6 +19,7 @@ from sqlalchemy import (
     TypeDecorator,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -293,6 +294,14 @@ class ContentItem(Base):
     __tablename__ = "content_items"
     __table_args__ = (
         Index("ix_content_published_chat_message", "published_channel_id", "published_message_id"),
+        Index("ix_content_status_kind", "status", "kind"),
+        Index(
+            "ix_content_scheduled_due",
+            "status",
+            "scheduled_at",
+            postgresql_where=text("scheduled_at IS NOT NULL"),
+            sqlite_where=text("scheduled_at IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

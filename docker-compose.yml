@@ -49,6 +49,8 @@ services:
       CONTROL_DIR: /control
       UPLOAD_DIR: /app/uploads
       TELEGRAM_PROXIES: ${TELEGRAM_PROXIES:-}
+      # Bot image HEALTHCHECK also probes Telegram/proxy; admin stays DB-only.
+      HEALTH_CHECK_TELEGRAM: ${HEALTH_CHECK_TELEGRAM:-1}
     volumes:
       - control_data:/control
       - uploads_data:/app/uploads
@@ -109,7 +111,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lab21}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lab21}
       UPLOAD_DIR: /app/uploads
       PROJECT_FILES_DIR: /app/project_files
-    command: ["sh", "-c", "alembic upgrade head && exec lab21-admin"]
+      # Migrations are owned by the bot service CMD; avoid dual alembic races.
+      HEALTH_CHECK_TELEGRAM: "0"
+    command: ["lab21-admin"]
     ports:
       # ADMIN_PORT is the in-container bind; publish elsewhere when the host port is taken.
       - "${ADMIN_HOST_PORT:-8080}:${ADMIN_PORT:-8080}"
@@ -118,6 +122,8 @@ services:
       - project_files_data:/app/project_files
     depends_on:
       postgres:
+        condition: service_healthy
+      bot:
         condition: service_healthy
 
   # Public HTTPS (profile: https) — Mini App and admin. Telegram accepts HTTPS only.
