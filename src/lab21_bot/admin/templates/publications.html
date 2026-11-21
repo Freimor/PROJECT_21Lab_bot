@@ -6,7 +6,7 @@
 <p class="page-sub">Два этапа: одобрение исходника → генерация LLM → правка и публикация.</p>
 {{ pub_tabs(pub_section, can_settings, can_queue, badges) }}
 
-<div class="grid">
+<div class="stats-strip">
   <div class="stat">
     <div class="label">Тишина Будней</div>
     <div class="value">{% if stats.silence_days is none %}—{% else %}{{ stats.silence_days }}д{% endif %}</div>
@@ -17,7 +17,7 @@
   </div>
   <div class="stat">
     <div class="label">Будни / Важное</div>
-    <div class="value" style="font-size:1.1rem">
+    <div class="value" style="font-size:1.15rem">
       {{ stats.queue_counts.get('story', 0) }} /
       {{ stats.queue_counts.get('important', 0) }}
     </div>
@@ -40,104 +40,116 @@
 
 {% if can_queue %}
 <h2 class="section-title">Очередь заявок</h2>
+<div class="pub-queue">
 {% for item in items %}
-<div class="panel" id="item-{{ item.id }}">
-  <div class="actions" style="justify-content:space-between;margin-bottom:0.75rem">
-    <div>
-      <strong>#{{ item.id }}</strong>
-      <span class="badge">{{ kind_labels.get(item.kind.value, item.kind.value) }}</span>
-      {% if item.llm_processed %}
-      <span class="badge">{% if llm_enabled %}LLM готов{% else %}Одобрен{% endif %}</span>
-      {% else %}
-      <span class="badge">Исходник</span>
-      {% endif %}
-      ·
+<article class="pub-scene" id="item-{{ item.id }}">
+  <div class="pub-scene-preview">
+    <div class="pub-scene-meta">
+      <div>
+        <strong>#{{ item.id }}</strong>
+        <span class="badge">{{ kind_labels.get(item.kind.value, item.kind.value) }}</span>
+        {% if item.llm_processed %}
+        <span class="badge is-active">{% if llm_enabled %}LLM готов{% else %}Одобрен{% endif %}</span>
+        {% else %}
+        <span class="badge">Исходник</span>
+        {% endif %}
+      </div>
+      <span class="muted">{{ item.created_at.strftime('%d.%m.%Y %H:%M') if item.created_at else '' }}</span>
+    </div>
+    <p class="pub-scene-label">
       {% if item.author %}
         {{ item.author.full_name }}
         {% if item.author.username %}(@{{ item.author.username }}){% endif %}
       {% else %}
         ID {{ item.author_id }}
       {% endif %}
+      · оригинал
+    </p>
+    <pre class="source-block">{{ item.source_text }}</pre>
+    {% if item.media %}
+    <div class="meme-media">
+      {% for media in item.media %}
+        {% if media.type == 'photo' %}
+        <a href="/publications/{{ item.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">
+          <img
+            class="meme-thumb"
+            src="/publications/{{ item.id }}/media/{{ loop.index0 }}"
+            alt="Фото заявки"
+            loading="lazy"
+          >
+        </a>
+        {% elif media.type == 'animation' %}
+        <a href="/publications/{{ item.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">
+          <video
+            class="meme-thumb"
+            src="/publications/{{ item.id }}/media/{{ loop.index0 }}"
+            autoplay
+            muted
+            loop
+            playsinline
+          ></video>
+        </a>
+        {% else %}
+        <span class="muted">{{ media.type or 'файл' }}</span>
+        {% endif %}
+      {% endfor %}
     </div>
-    <span class="muted">{{ item.created_at.strftime('%d.%m.%Y %H:%M') if item.created_at else '' }}</span>
+    {% endif %}
   </div>
 
-  <h3 style="margin:0 0 0.35rem;font-size:0.9rem;color:var(--muted)">Оригинал автора (только чтение)</h3>
-  <pre class="source-block">{{ item.source_text }}</pre>
-  {% if item.media %}
-  <div class="meme-media" style="margin-top:0.55rem">
-    {% for media in item.media %}
-      {% if media.type == 'photo' %}
-      <a href="/publications/{{ item.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">
-        <img
-          class="meme-thumb"
-          src="/publications/{{ item.id }}/media/{{ loop.index0 }}"
-          alt="Фото заявки"
-          loading="lazy"
-        >
-      </a>
-      {% elif media.type == 'animation' %}
-      <a href="/publications/{{ item.id }}/media/{{ loop.index0 }}" target="_blank" rel="noopener">
-        <video
-          class="meme-thumb"
-          src="/publications/{{ item.id }}/media/{{ loop.index0 }}"
-          autoplay
-          muted
-          loop
-          playsinline
-        ></video>
-      </a>
-      {% else %}
-      <span class="muted">{{ media.type or 'файл' }}</span>
-      {% endif %}
-    {% endfor %}
-  </div>
-  {% endif %}
-
-  {% if not item.llm_processed %}
-  <form method="post" class="actions js-llm-generate" style="margin-top:0.75rem;gap:0.5rem;flex-wrap:wrap">
-    <button type="submit" formaction="/publications/{{ item.id }}/generate">
-      {% if llm_enabled %}Одобрить и сгенерировать LLM{% else %}Одобрить исходник{% endif %}
-    </button>
-    <button
-      type="button"
-      class="danger js-reject-open"
-      data-action="/publications/{{ item.id }}/reject"
-      data-preview-id="reject-preview-{{ item.id }}"
-    >Отклонить</button>
-    <p class="muted span-all" style="margin:0;flex-basis:100%">Генерация на CPU может занять несколько минут — не закрывайте страницу.</p>
-  </form>
-  {% else %}
-  <form method="post" class="form-grid" style="margin-top:0.75rem">
-    <label style="grid-column:1/-1">Вариант для публикации (можно править)
-      <textarea name="draft_text" rows="8" id="draft-{{ item.id }}">{{ item.draft_text or '' }}</textarea>
-    </label>
-    <label>Запланировать на ({{ timezone }})
-      <input type="datetime-local" name="scheduled_at">
-    </label>
-    <div class="actions" style="grid-column:1/-1">
-      <button type="submit" formaction="/publications/{{ item.id }}/save-draft" class="secondary">Сохранить черновик</button>
-      {% if llm_enabled %}
-      <button type="submit" formaction="/publications/{{ item.id }}/generate" class="secondary js-llm-regen">Перегенерировать LLM</button>
-      {% endif %}
-      <button type="submit" formaction="/publications/{{ item.id }}/publish">Опубликовать сейчас</button>
-      <button type="submit" formaction="/publications/{{ item.id }}/schedule" class="secondary">Запланировать</button>
+  <div class="pub-scene-panel">
+    {% if not item.llm_processed %}
+    <p class="pub-scene-label">Действия</p>
+    <form method="post" class="actions js-llm-generate" style="flex-direction:column;align-items:stretch;gap:0.55rem">
+      <button type="submit" class="primary-cta" formaction="/publications/{{ item.id }}/generate">
+        {% if llm_enabled %}Одобрить и сгенерировать LLM{% else %}Одобрить исходник{% endif %}
+      </button>
       <button
         type="button"
         class="danger js-reject-open"
         data-action="/publications/{{ item.id }}/reject"
         data-preview-id="reject-preview-{{ item.id }}"
-        data-draft-input="draft-{{ item.id }}"
       >Отклонить</button>
-    </div>
-    <p class="muted" style="margin:0;grid-column:1/-1">Перегенерация на CPU может занять несколько минут — не закрывайте страницу.</p>
-  </form>
-  {% endif %}
-  <pre id="reject-preview-{{ item.id }}" class="reject-source-data" hidden>{{ item.draft_text or item.source_text }}</pre>
-</div>
+      <p class="pub-scene-hint">Генерация на CPU может занять несколько минут — не закрывайте страницу.</p>
+    </form>
+    {% else %}
+    <p class="pub-scene-label">Вариант для публикации</p>
+    <form method="post" class="stack">
+      <label>Черновик
+        <textarea name="draft_text" rows="8" id="draft-{{ item.id }}">{{ item.draft_text or '' }}</textarea>
+      </label>
+      <label>Запланировать на ({{ timezone }})
+        <input type="datetime-local" name="scheduled_at">
+      </label>
+      <div class="actions" style="flex-direction:column;align-items:stretch;gap:0.5rem">
+        <button type="submit" class="primary-cta" formaction="/publications/{{ item.id }}/publish">Опубликовать сейчас</button>
+        <div class="actions">
+          <button type="submit" formaction="/publications/{{ item.id }}/save-draft" class="secondary">Сохранить</button>
+          {% if llm_enabled %}
+          <button type="submit" formaction="/publications/{{ item.id }}/generate" class="secondary js-llm-regen">Перегенерировать</button>
+          {% endif %}
+          <button type="submit" formaction="/publications/{{ item.id }}/schedule" class="secondary">В расписание</button>
+        </div>
+        <button
+          type="button"
+          class="danger js-reject-open"
+          data-action="/publications/{{ item.id }}/reject"
+          data-preview-id="reject-preview-{{ item.id }}"
+          data-draft-input="draft-{{ item.id }}"
+        >Отклонить</button>
+      </div>
+      <p class="pub-scene-hint">Перегенерация на CPU может занять несколько минут — не закрывайте страницу.</p>
+    </form>
+    {% endif %}
+    <pre id="reject-preview-{{ item.id }}" class="reject-source-data" hidden>{{ item.draft_text or item.source_text }}</pre>
+  </div>
+</article>
 {% else %}
-<div class="panel muted">Очередь Будней и Важного пуста.{% if stats.queue_memes %} Заявки на мемы — во вкладке <a href="/publications/memes">Мемы</a>.{% endif %}</div>
+<div class="pub-empty">
+  Очередь Будней и Важного пуста.{% if stats.queue_memes %} Заявки на мемы — во вкладке <a href="/publications/memes">Мемы</a>.{% endif %}
+</div>
 {% endfor %}
+</div>
 
 {% if scheduled %}
 <h2 class="section-title">Расписание</h2>
