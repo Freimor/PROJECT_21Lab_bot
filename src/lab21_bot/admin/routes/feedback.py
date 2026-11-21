@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 from urllib.parse import urlencode
 
@@ -11,11 +12,11 @@ from lab21_bot.admin.templating import render
 from lab21_bot.models import FeedbackKind, FeedbackStatus
 from lab21_bot.services.feedback import (
     KIND_LABELS,
-    STATUS_LABELS,
-    FeedbackError,
     REACTION_ACCEPTED,
     REACTION_DONE,
     REACTION_REJECTED,
+    STATUS_LABELS,
+    FeedbackError,
     complete_feedback,
     count_pending_feedback,
     decide_feedback,
@@ -24,6 +25,7 @@ from lab21_bot.services.feedback import (
 from lab21_bot.services.telegram_profile import TelegramProfileError, download_telegram_file
 
 router = APIRouter(tags=["feedback"])
+logger = logging.getLogger(__name__)
 
 
 def _redirect(
@@ -157,7 +159,12 @@ async def _set_reaction(settings, chat_id: int, message_id: int, emoji: str) -> 
             request_timeout=20.0,
         )
     except Exception:
-        pass
+        logger.exception(
+            "feedback_set_reaction_failed chat_id=%s message_id=%s emoji=%s",
+            chat_id,
+            message_id,
+            emoji,
+        )
 
 
 @router.post("/feedback/{item_id}/accept")

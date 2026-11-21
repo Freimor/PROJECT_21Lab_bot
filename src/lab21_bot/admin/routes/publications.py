@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Annotated
 from urllib.parse import quote
@@ -71,6 +72,7 @@ from lab21_bot.services.templates import (
 from lab21_bot.services.uploads import UploadError, read_uploaded_file
 
 router = APIRouter(tags=["publications"])
+logger = logging.getLogger(__name__)
 
 
 async def _load_pub_settings(session: AsyncSession, settings: Settings) -> dict[str, int]:
@@ -657,7 +659,7 @@ async def publications_meme_approve(
             finally:
                 await bot.session.close()
         except Exception:
-            pass
+            logger.exception("meme_approve_flavor_failed item_id=%s", item_id)
         return _redirect("/publications/memes", f"Мем #{item_id} добавлен в коллекцию")
     except (MemeError, ContentError) as exc:
         return _redirect("/publications/memes", error=str(exc))
