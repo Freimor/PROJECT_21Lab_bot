@@ -12,6 +12,9 @@
   --line-strong: rgba(255, 255, 255, 0.14);
   --accent: #ff7a25;
   --accent-ink: #1a120c;
+  /* Secondary links / inactive tabs — muted amber; orange stays CTA-only */
+  --link: #c4a574;
+  --link-hover: #d4b88a;
   --warn: #e8a04a;
   --danger: #e05a4f;
   --ok: #ff7a25;
@@ -44,12 +47,18 @@ body {
   line-height: 1.45;
 }
 
-a {
-  color: var(--accent);
+a,
+a:any-link,
+a:link,
+a:visited {
+  color: #c4a574;
+  color: var(--link);
   text-decoration: none;
 }
 
 a:hover {
+  color: #d4b88a;
+  color: var(--link-hover);
   text-decoration: underline;
 }
 
@@ -313,8 +322,12 @@ a:hover {
 }
 
 .stat .value a {
-  color: var(--accent);
+  color: var(--link);
   font-weight: 700;
+}
+
+.stat .value a:hover {
+  color: var(--link-hover);
 }
 
 .period-pills {
@@ -395,7 +408,7 @@ a:hover {
 }
 
 .col-sort-dir {
-  color: var(--accent);
+  color: var(--link);
   font-size: 0.85rem;
   line-height: 1;
 }
@@ -1335,7 +1348,7 @@ button.warn {
 }
 
 .season-map-meta a:hover {
-  color: var(--accent);
+  color: var(--link-hover);
 }
 
 .season-map-meta .muted {
@@ -1344,11 +1357,11 @@ button.warn {
 
 .season-map-meta .muted a {
   font-weight: 500;
-  color: var(--muted);
+  color: var(--link);
 }
 
 .season-map-meta .muted a:hover {
-  color: var(--accent);
+  color: var(--link-hover);
 }
 
 .season-map-meta.is-off a {
@@ -1474,8 +1487,11 @@ button.warn {
 }
 
 .subnav a,
+.subnav a:any-link,
+.subnav a:link,
 .subnav a:visited {
-  color: var(--muted);
+  color: #c4a574 !important;
+  color: var(--link) !important;
   padding: 0.45rem 0.9rem;
   border-radius: var(--radius-pill);
   border: 1px solid transparent;
@@ -1489,16 +1505,22 @@ button.warn {
 }
 
 .subnav a:hover {
-  color: var(--ink);
+  color: #d4b88a !important;
+  color: var(--link-hover) !important;
   background: var(--bg-soft);
   text-decoration: none;
 }
 
-.subnav a.active {
-  color: var(--accent-ink);
+.subnav a.active,
+.subnav a.active:any-link,
+.subnav a.active:link,
+.subnav a.active:visited,
+.subnav a.active:hover {
+  color: var(--accent-ink) !important;
   border-color: var(--accent);
   background: var(--accent);
   font-weight: 650;
+  text-decoration: none;
 }
 
 .subnav a.active .nav-badge {
@@ -1533,8 +1555,8 @@ button.warn {
 }
 
 .meme-sort:hover {
-  color: var(--accent);
-  background: rgba(255, 122, 37, 0.12);
+  color: var(--link-hover);
+  background: rgba(196, 165, 116, 0.14);
   text-decoration: none;
 }
 
@@ -1786,8 +1808,12 @@ button.warn {
 
 .job-desc > summary {
   cursor: pointer;
-  color: var(--accent);
+  color: var(--link);
   list-style: none;
+}
+
+.job-desc > summary:hover {
+  color: var(--link-hover);
 }
 
 .job-desc > summary::-webkit-details-marker {
