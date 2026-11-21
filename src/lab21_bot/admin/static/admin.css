@@ -342,11 +342,15 @@ a:hover {
 }
 
 .period-pills a,
+.period-pills a:any-link,
+.period-pills a:link,
+.period-pills a:visited,
 .period-pills button {
   appearance: none;
   border: 1px solid transparent;
   background: var(--bg-soft);
-  color: var(--muted);
+  color: #c4a574 !important;
+  color: var(--link) !important;
   border-radius: var(--radius-pill);
   padding: 0.28rem 0.7rem;
   font: inherit;
@@ -359,14 +363,19 @@ a:hover {
 
 .period-pills a:hover,
 .period-pills button:hover {
-  color: var(--ink);
+  color: #d4b88a !important;
+  color: var(--link-hover) !important;
   text-decoration: none;
   background: #333;
 }
 
 .period-pills a.active,
+.period-pills a.active:any-link,
+.period-pills a.active:link,
+.period-pills a.active:visited,
+.period-pills a.active:hover,
 .period-pills button.active {
-  color: var(--accent-ink);
+  color: var(--accent-ink) !important;
   border-color: var(--accent);
   background: var(--accent);
   font-weight: 650;
@@ -392,18 +401,22 @@ a:hover {
   min-width: 9rem;
 }
 
-.col-sort {
+.col-sort,
+.col-sort:link,
+.col-sort:visited {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  color: var(--muted);
+  color: #c4a574 !important;
+  color: var(--link) !important;
   text-decoration: none;
   font-weight: 600;
 }
 
 .col-sort:hover,
 .col-sort.active {
-  color: var(--ink);
+  color: #d4b88a !important;
+  color: var(--link-hover) !important;
   text-decoration: none;
 }
 
@@ -1275,7 +1288,11 @@ button.warn {
 }
 
 .season-map-year,
-.season-map-year-step {
+.season-map-year:link,
+.season-map-year:visited,
+.season-map-year-step,
+.season-map-year-step:link,
+.season-map-year-step:visited {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1283,20 +1300,25 @@ button.warn {
   padding: 0.2rem 0.45rem;
   border-radius: 6px;
   border: 1px solid transparent;
-  color: var(--muted);
+  color: #c4a574 !important;
+  color: var(--link) !important;
   text-decoration: none;
   font-size: 0.85rem;
 }
 
 .season-map-year:hover,
 .season-map-year-step:hover {
-  color: var(--ink);
+  color: #d4b88a !important;
+  color: var(--link-hover) !important;
   background: var(--bg);
   text-decoration: none;
 }
 
-.season-map-year.is-current {
-  color: var(--accent-ink);
+.season-map-year.is-current,
+.season-map-year.is-current:link,
+.season-map-year.is-current:visited,
+.season-map-year.is-current:hover {
+  color: var(--accent-ink) !important;
   background: var(--accent);
   border-color: var(--accent);
 }
